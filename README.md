@@ -516,3 +516,4 @@ gunicorn -w 4 -b 0.0.0.0:8080 app:app
 ---
 
 *For in-app help, click the **Documentation** link in the navigation bar after logging in.*
+Contact us: https://www.linkedin.com/showcase/datagrabber/about/?viewAsMember=true
