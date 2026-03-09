@@ -721,8 +721,8 @@ Extractor{% endblock %} {% block content %}
            }
 
            try {
-             // Use the same uploadFiles function that handles individual file uploads
-             uploadFiles(validFiles);
+             // Use chunked upload so folder size is truly unlimited
+             uploadFilesChunked(validFiles);
            } catch (error) {
              uploadStatus.innerHTML = `Error processing files: ${error.message}`;
              uploadStatus.className = 'alert alert-danger mt-2';
@@ -876,77 +876,222 @@ Extractor{% endblock %} {% block content %}
        
        console.log('DEBUG: Test function added to window object');
 
-       // File upload function
-       async function uploadFiles(files) {
-         const formData = new FormData();
-         Array.from(files).forEach(file => {
-           formData.append('files[]', file);
-         });
+       // ─── Upload helpers ────────────────────────────────────────────────
+       const PROJECT_ID   = '{{ project.id }}';
+       const UPLOAD_URL   = `/projects/${PROJECT_ID}/upload`;
+       const CHUNK_SIZE   = 10;   // files per HTTP request — keeps each request small
 
-         // Show consistent progress UI
+       /** Show the spinner / progress bar and lock the submit button */
+       function showUploadUI(msg) {
          progressBar.style.display = 'flex';
          progressBarInner.style.width = '5%';
-         progressBarInner.classList.add('progress-bar-animated');
-         progressBarInner.classList.add('progress-enhanced');
+         progressBarInner.classList.add('progress-bar-animated', 'progress-enhanced');
          submitUploadBtn.disabled = true;
          spinner.classList.remove('d-none');
-
-         // Show initial status with enhanced styling
          uploadStatus.innerHTML = `
            <div class="d-flex align-items-center">
              <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-             <span>Uploading ${files.length} files...</span>
-           </div>
-         `;
+             <span>${msg}</span>
+           </div>`;
          uploadStatus.className = 'alert alert-info mt-2';
+       }
+
+       /** Reset UI back to idle */
+       function resetUploadUI() {
+         submitUploadBtn.disabled = false;
+         spinner.classList.add('d-none');
+       }
+
+       /** Update progress bar (0–100 %) */
+       function setProgress(pct) {
+         progressBarInner.style.width = `${Math.max(5, Math.min(100, pct))}%`;
+       }
+
+       // ─── Single-batch upload (drag-drop / manual file picker) ───────────
+       async function uploadFiles(files) {
+         const fileArray = Array.from(files);
+         showUploadUI(`Uploading ${fileArray.length} file${fileArray.length > 1 ? 's' : ''}…`);
 
          try {
-           const response = await safeFetch(`/projects/{{ project.id }}/upload`, {
-             method: 'POST',
-             body: formData
-           });
+           const formData = new FormData();
+           fileArray.forEach(f => formData.append('files[]', f));
 
+           const response = await safeFetch(UPLOAD_URL, { method: 'POST', body: formData });
            const data = await response.json();
 
            if (response.ok && data.success && data.job_queued) {
-             // Job queued successfully - start monitoring progress with enhanced UI
              uploadStatus.innerHTML = `
                <div class="d-flex align-items-center">
                  <div class="spinner-grow spinner-grow-sm text-success me-2" role="status"></div>
-                 <span>Processing queued: ${data.total_files} files (estimated ${data.estimated_credits} pages)</span>
-               </div>
-             `;
+                 <span>Processing queued: ${data.total_files} file${data.total_files !== 1 ? 's' : ''}</span>
+               </div>`;
              uploadStatus.className = 'alert alert-success mt-2';
-             progressBarInner.style.width = '10%';
-             
-             // Start polling for job progress
+             setProgress(10);
              pollJobProgress(data.job_id);
-           } else if (data.needs_purchase) {
-             uploadStatus.innerHTML = `
-               <div>
-                 <strong>⚠️ Unable to start processing</strong><br>
-                 ${data.error || 'There was a problem starting the background job.'}
-               </div>
-             `;
-             uploadStatus.className = 'alert alert-warning mt-2';
-             progressBar.style.display = 'none';
            } else {
              throw new Error(data.error || 'Upload failed');
            }
          } catch (error) {
-           if (error.sessionExpired) return; // safeFetch already redirected
+           if (error.sessionExpired) return;
            uploadStatus.innerHTML = `
              <div class="d-flex align-items-center">
                <div class="text-danger me-2"><i class="fas fa-exclamation-circle"></i></div>
-               <span>${error.message || 'Failed to upload files'}</span>
-             </div>
-           `;
+               <span>${error.message || 'Upload failed'}</span>
+             </div>`;
            uploadStatus.className = 'alert alert-danger mt-2';
            progressBar.style.display = 'none';
          } finally {
-           submitUploadBtn.disabled = false;
-           spinner.classList.add('d-none');
+           resetUploadUI();
          }
+       }
+
+       // ─── Chunked upload for folders (unlimited files) ──────────────────
+       // Splits the file list into CHUNK_SIZE batches and posts them one at a
+       // time.  Each batch creates its own background job.  Once all batches
+       // are sent we poll a single /jobs-status endpoint for the aggregate
+       // progress so the number of poll requests never grows.
+       async function uploadFilesChunked(files) {
+         const fileArray  = Array.from(files);
+         const total      = fileArray.length;
+         const chunks     = Math.ceil(total / CHUNK_SIZE);
+         const collectedJobIds = [];
+
+         showUploadUI(`Preparing ${total} files (${chunks} batch${chunks > 1 ? 'es' : ''})…`);
+
+         // ── Phase 1: upload all chunks ─────────────────────────────────
+         for (let i = 0; i < total; i += CHUNK_SIZE) {
+           const chunk     = fileArray.slice(i, i + CHUNK_SIZE);
+           const batchNum  = Math.floor(i / CHUNK_SIZE) + 1;
+           const rangeEnd  = Math.min(i + CHUNK_SIZE, total);
+
+           uploadStatus.innerHTML = `
+             <div class="d-flex align-items-center">
+               <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+               <span>
+                 Uploading batch ${batchNum} / ${chunks}
+                 &nbsp;<small class="text-muted">(files ${i + 1}–${rangeEnd} of ${total})</small>
+               </span>
+             </div>`;
+           uploadStatus.className = 'alert alert-info mt-2';
+
+           // upload progress: 0 → 50 % while sending batches
+           setProgress(Math.round((batchNum - 1) / chunks * 50));
+
+           try {
+             const formData = new FormData();
+             chunk.forEach(f => formData.append('files[]', f));
+
+             const response = await safeFetch(UPLOAD_URL, { method: 'POST', body: formData });
+             const data = await response.json();
+
+             if (response.ok && data.success && data.job_queued) {
+               collectedJobIds.push(data.job_id);
+             } else {
+               // Non-fatal: log and continue with remaining batches
+               console.warn(`Batch ${batchNum} error:`, data.error || 'unknown');
+             }
+           } catch (err) {
+             if (err.sessionExpired) return;
+             console.warn(`Batch ${batchNum} upload failed:`, err.message);
+           }
+         }
+
+         if (collectedJobIds.length === 0) {
+           uploadStatus.innerHTML = `<div class="text-danger"><i class="fas fa-exclamation-circle me-1"></i>All batches failed to upload.</div>`;
+           uploadStatus.className = 'alert alert-danger mt-2';
+           resetUploadUI();
+           return;
+         }
+
+         // ── Phase 2: aggregate polling ─────────────────────────────────
+         uploadStatus.innerHTML = `
+           <div class="d-flex align-items-center">
+             <div class="spinner-grow spinner-grow-sm text-success me-2" role="status"></div>
+             <span>All ${total} files sent — processing in background…</span>
+           </div>`;
+         uploadStatus.className = 'alert alert-success mt-2';
+         setProgress(50);
+         resetUploadUI();
+
+         await pollChunkedProgress(collectedJobIds, total);
+       }
+
+       /** Poll /jobs-status for all collected job IDs until every job is done */
+       async function pollChunkedProgress(jobIds, totalFiles) {
+         const POLL_INTERVAL  = 2000;
+         const MAX_POLLS      = 7200; // 4 hours max
+         let   pollCount      = 0;
+         let   errorStreak    = 0;
+
+         return new Promise(resolve => {
+           const iv = setInterval(async () => {
+             pollCount++;
+             if (pollCount > MAX_POLLS) { clearInterval(iv); resolve(); return; }
+
+             try {
+               const resp = await safeFetch(
+                 `/projects/${PROJECT_ID}/jobs-status`,
+                 {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ job_ids: jobIds })
+                 }
+               );
+               if (resp.status === 401) { clearInterval(iv); resolve(); return; }
+
+               const s = await resp.json();
+               errorStreak = 0;
+
+               const doneJobs    = (s.total_jobs || 0) - (s.active_jobs || 0);
+               const totalJobs   = s.total_jobs || 1;
+               // Use file-level progress when available, otherwise fall back to job-level progress
+               const filePct     = s.total_files > 0 ? s.progress_percentage || 0 : 0;
+               const jobPct      = Math.round(doneJobs / totalJobs * 100);
+               const effectivePct = filePct > 0 ? filePct : jobPct;
+               setProgress(50 + Math.round(effectivePct / 2));
+
+               const fileDetail = s.processed_files > 0
+                 ? `<strong>${s.processed_files}</strong> / ${s.total_files} files`
+                 : `${doneJobs} / ${totalJobs} batch${totalJobs !== 1 ? 'es' : ''} complete`;
+
+               uploadStatus.innerHTML = `
+                 <div class="d-flex align-items-center">
+                   <div class="spinner-grow spinner-grow-sm text-success me-2" role="status"></div>
+                   <span>
+                     Processing: ${fileDetail}
+                     ${s.failed_files > 0 ? `&nbsp;<span class="text-warning">(${s.failed_files} failed)</span>` : ''}
+                   </span>
+                 </div>`;
+               uploadStatus.className = 'alert alert-success mt-2';
+
+               if (s.all_done) {
+                 clearInterval(iv);
+                 setProgress(100);
+                 const successCount = s.processed_files > 0 ? s.processed_files : s.total_files - s.failed_files;
+                 uploadStatus.innerHTML = `
+                   <div class="d-flex align-items-center">
+                     <div class="text-success me-2"><i class="fas fa-check-circle fa-lg"></i></div>
+                     <span>
+                       <strong>Done!</strong> ${successCount} file${successCount !== 1 ? 's' : ''} processed
+                       ${s.failed_files > 0 ? ` — <span class="text-warning">${s.failed_files} failed</span>` : ''}
+                     </span>
+                   </div>`;
+                 uploadStatus.className = 'alert alert-success mt-2';
+                 setTimeout(() => window.location.reload(), 2500);
+                 resolve();
+               }
+             } catch (err) {
+               if (err && err.sessionExpired) { clearInterval(iv); resolve(); return; }
+               errorStreak++;
+               if (errorStreak >= 5) {
+                 clearInterval(iv);
+                 uploadStatus.innerHTML = `<div class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>Lost connection to server. Refresh the page to see results.</div>`;
+                 uploadStatus.className = 'alert alert-warning mt-2';
+                 resolve();
+               }
+             }
+           }, POLL_INTERVAL);
+         });
        }
 
        // Drag and drop handlers

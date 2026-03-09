@@ -17,7 +17,9 @@ class Config:
     # Database – default to a simple local SQLite file for non‑technical users
     _db_url = (os.getenv('DATABASE_URL') or '').strip()
     SQLALCHEMY_DATABASE_URI = _db_url if _db_url else f"sqlite:///{os.path.join(BASE_DIR, 'datagrabber.db')}"
-    MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))  # 16MB
+    # Per-request upload limit. Folder uploads now send CHUNK_SIZE=10 files per request
+    # so 200 MB per chunk handles even very large individual files comfortably.
+    MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', 200 * 1024 * 1024))  # 200 MB per chunk
     
     # Session
     SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS

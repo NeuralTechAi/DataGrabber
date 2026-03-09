@@ -771,6 +771,47 @@ def job_status(project_id, job_id):
     
     return jsonify(status)
 
+@bp.route('/<project_id>/jobs-status', methods=['POST'])
+@login_required
+def jobs_status(project_id):
+    """Aggregate status for multiple job IDs (used by chunked folder uploads).
+    Body: {"job_ids": ["id1", "id2", ...]}
+    Returns counts merged across all jobs so the client only needs one poll request.
+    """
+    project = Project.query.get(project_id)
+    if not project or project.user_id != g.user.id:
+        abort(404)
+
+    job_ids = (request.get_json(silent=True) or {}).get('job_ids', [])
+    if not job_ids:
+        return jsonify({'error': 'No job_ids provided'}), 400
+
+    from app.models.processing_job import ProcessingJob
+    TERMINAL = {'completed', 'failed', 'cancelled'}
+
+    jobs = ProcessingJob.query.filter(
+        ProcessingJob.id.in_(job_ids),
+        ProcessingJob.project_id == project_id
+    ).all()
+
+    total_files     = sum(j.total_files     or 0 for j in jobs)
+    processed_files = sum(j.processed_files or 0 for j in jobs)
+    failed_files    = sum(j.failed_files    or 0 for j in jobs)
+    active_jobs     = [j for j in jobs if j.status not in TERMINAL]
+
+    progress_pct = int(processed_files / total_files * 100) if total_files > 0 else 0
+
+    return jsonify({
+        'all_done':          len(active_jobs) == 0,
+        'active_jobs':       len(active_jobs),
+        'total_jobs':        len(jobs),
+        'total_files':       total_files,
+        'processed_files':   processed_files,
+        'failed_files':      failed_files,
+        'progress_percentage': progress_pct,
+    })
+
+
 @bp.route('/<project_id>/cancel-job/<job_id>', methods=['POST'])
 @login_required
 def cancel_job(project_id, job_id):
