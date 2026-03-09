@@ -351,37 +351,38 @@
             <div class="form-text">Edit the fields as a JSON array.</div>
           </div>
           <div class="mb-3">
-            <label class="form-label">Storage Location</label>
-            <div class="input-group">
+            <label class="form-label">Storage Location*</label>
+            <div class="row g-2">
+              <div class="col-md-7">
+                <label for="templateStorageBasePath" class="form-label small text-muted mb-1">Base location</label>
+                <select class="form-select" id="templateStorageBasePath" required>
+                  <option value="">Loading locations…</option>
+                </select>
+              </div>
+              <div class="col-md-5">
+                <label for="templateStorageFolderName" class="form-label small text-muted mb-1">Project folder name</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="templateStorageFolderName"
+                  placeholder="e.g., my-project"
+                  required
+                />
+              </div>
+            </div>
+            <div class="input-group mt-2">
+              <span class="input-group-text"><i class="fas fa-folder-open"></i></span>
               <input
-                type="file"
-                class="form-control"
-                id="templateDirectoryInput"
-                webkitdirectory
-                directory
-                multiple
-                style="display: none;"
-              />
-              <button
-                type="button"
-                class="form-control text-start text-muted"
+                type="text"
+                class="form-control text-muted"
                 id="templateStoragePathLabel"
-                style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-              >
-                Select a storage location
-              </button>
-              <input
-                type="hidden"
-                id="templateStoragePath"
-                required
+                readonly
+                value="Select a base location and folder name"
               />
-              <button
-                class="btn btn-outline-primary"
-                type="button"
-                id="browseTemplateStorageBtn"
-              >
-                <i class="fas fa-folder-open me-2"></i> Browse
-              </button>
+              <input type="hidden" id="templateStoragePath" required />
+            </div>
+            <div class="form-text">
+              <i class="fas fa-folder-open me-1"></i> Selects a storage folder on disk — does not upload any files.
             </div>
           </div>
         </form>
@@ -506,26 +507,65 @@
     });
 
     // projects template functionality
-    const uploadTemplateBtn = document.getElementById("uploadTemplateBtn");
-    const templateFileInput = document.getElementById("templateFileInput");
-    const templateModal = new bootstrap.Modal(
-      document.getElementById("templateModal")
-    );
-    const templateForm = document.getElementById("templateForm");
-    const templateProjectName = document.getElementById("templateProjectName");
-    const templateProjectDescription = document.getElementById(
-      "templateProjectDescription"
-    );
-    const templateFields = document.getElementById("templateFields");
-    const templateStoragePath = document.getElementById("templateStoragePath");
-    const browseTemplateStorageBtn = document.getElementById(
-      "browseTemplateStorageBtn"
-    );
-    const createProjectFromTemplateBtn = document.getElementById(
-      "createProjectFromTemplateBtn"
-    );
-    const templateModalStatus = document.getElementById("templateModalStatus");
+    const uploadTemplateBtn         = document.getElementById("uploadTemplateBtn");
+    const templateFileInput          = document.getElementById("templateFileInput");
+    const templateModal              = new bootstrap.Modal(document.getElementById("templateModal"));
+    const templateProjectName        = document.getElementById("templateProjectName");
+    const templateProjectDescription = document.getElementById("templateProjectDescription");
+    const templateFields             = document.getElementById("templateFields");
+    const templateStoragePath        = document.getElementById("templateStoragePath");
+    const templateStorageBasePath    = document.getElementById("templateStorageBasePath");
+    const templateStorageFolderName  = document.getElementById("templateStorageFolderName");
+    const templateStoragePathLabel   = document.getElementById("templateStoragePathLabel");
+    const createProjectFromTemplateBtn = document.getElementById("createProjectFromTemplateBtn");
+    const templateModalStatus        = document.getElementById("templateModalStatus");
 
+    // ── Storage path helpers (mirrors new_project.html) ─────────────────
+    function tplSanitizeFolder(name) {
+      return (name || "").trim().replace(/[^a-zA-Z0-9_\-]/g, "-").replace(/-{2,}/g, "-").replace(/^-|-$/g, "");
+    }
+    function tplJoinPath(base, folder) {
+      const b = (base || "").replace(/[\\/]+$/, "");
+      const f = tplSanitizeFolder(folder);
+      return b && f ? `${b}/${f}` : "";
+    }
+    function tplUpdatePathPreview() {
+      const full = tplJoinPath(templateStorageBasePath.value, templateStorageFolderName.value);
+      templateStoragePath.value = full;
+      if (full) {
+        templateStoragePathLabel.value = full;
+        templateStoragePathLabel.classList.remove("text-muted");
+        templateStoragePathLabel.classList.add("text-primary");
+      } else {
+        templateStoragePathLabel.value = "Select a base location and folder name";
+        templateStoragePathLabel.classList.add("text-muted");
+        templateStoragePathLabel.classList.remove("text-primary");
+      }
+    }
+    function tplPopulateStorageLocations() {
+      fetch("/projects/storage-paths", { headers: { Accept: "application/json" } })
+        .then(r => r.json())
+        .then(data => {
+          if (!data.success || !Array.isArray(data.paths) || data.paths.length === 0)
+            throw new Error("No writable storage locations found");
+          templateStorageBasePath.innerHTML = "";
+          data.paths.forEach(p => {
+            const opt = document.createElement("option");
+            opt.value = opt.textContent = p;
+            templateStorageBasePath.appendChild(opt);
+          });
+          if (data.default_path && data.paths.includes(data.default_path))
+            templateStorageBasePath.value = data.default_path;
+          tplUpdatePathPreview();
+        })
+        .catch(err => {
+          templateStorageBasePath.innerHTML = '<option value="">No storage locations available</option>';
+        });
+    }
+    templateStorageBasePath.addEventListener("change", tplUpdatePathPreview);
+    templateStorageFolderName.addEventListener("input", tplUpdatePathPreview);
+
+    // ── Template file upload / modal open ───────────────────────────────
     uploadTemplateBtn.addEventListener("click", function () {
       templateFileInput.value = "";
       templateFileInput.click();
@@ -538,57 +578,24 @@
       reader.onload = function (e) {
         try {
           const data = JSON.parse(e.target.result);
-          templateProjectName.value = data.name || "";
+          templateProjectName.value        = data.name || "";
           templateProjectDescription.value = data.description || "";
-          templateFields.value = JSON.stringify(data.fields || [], null, 2);
-          templateStoragePath.value = "";
-          templateModalStatus.innerHTML = "";
+          templateFields.value             = JSON.stringify(data.fields || [], null, 2);
+          templateStoragePath.value        = "";
+          templateStoragePathLabel.value   = "Select a base location and folder name";
+          templateStoragePathLabel.classList.add("text-muted");
+          templateStoragePathLabel.classList.remove("text-primary");
+          // auto-fill folder name from template project name
+          templateStorageFolderName.value  = tplSanitizeFolder(data.name || "");
+          templateModalStatus.innerHTML    = "";
+          tplPopulateStorageLocations();
+          tplUpdatePathPreview();
           templateModal.show();
         } catch (err) {
-          templateModalStatus.innerHTML =
-            '<div class="alert alert-danger">Invalid template file.</div>';
+          templateModalStatus.innerHTML = '<div class="alert alert-danger">Invalid template file.</div>';
         }
       };
       reader.readAsText(file);
-    });
-
-    browseTemplateStorageBtn.addEventListener("click", function () {
-      showTemplateFolderBrowser();
-    });
-
-    // Template folder browser functionality - use native HTML5 directory selection
-    const templateDirectoryInput = document.getElementById('templateDirectoryInput');
-    const templateStoragePathLabel = document.getElementById('templateStoragePathLabel');
-
-    // When Browse button is clicked, trigger the directory input
-    browseTemplateStorageBtn.addEventListener("click", function() {
-      templateDirectoryInput.click();
-    });
-
-    // Also allow clicking on the label to trigger directory selection
-    templateStoragePathLabel.addEventListener('click', function() {
-      templateDirectoryInput.click();
-    });
-
-    // When the user selects a directory via the native file picker
-    templateDirectoryInput.addEventListener('change', function() {
-      if (this.files && this.files.length > 0) {
-        // Get the folder name from the first file's path
-        const firstFile = this.files[0];
-        const folderPath = firstFile.webkitRelativePath.split('/')[0];
-
-        // Update the UI
-        templateStoragePathLabel.textContent = `Selected: ${folderPath}`;
-        templateStoragePathLabel.classList.remove('text-muted');
-        templateStoragePathLabel.classList.add('text-primary');
-
-        // Store the folder name in the hidden input
-        // Note: We can't get the full client path for security reasons,
-        // but we can use the folder name as an identifier
-        templateStoragePath.value = folderPath;
-
-        templateModalStatus.innerHTML = `<div class="alert alert-success">Storage location selected: ${folderPath}</div>`;
-      }
     });
 
     createProjectFromTemplateBtn.addEventListener("click", function () {
