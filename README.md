@@ -101,8 +101,8 @@ DataGrabber works with several AI providers. **Pick one** — you only need one 
 Open a terminal and run:
 
 ```bash
-git clone https://github.com/your-org/DataGrabberV1.git
-cd DataGrabberV1
+git clone https://github.com/NeuralTechAi/DataGrabber.git
+cd DataGrabber
 ```
 
 ### If you don't have Git:
@@ -113,7 +113,7 @@ cd DataGrabberV1
 
 ```bash
 # Example — adjust the path to match where you unzipped it
-cd ~/Desktop/DataGrabberV1
+cd ~/Desktop/DataGrabber
 ```
 
 > **Windows tip:** Right-click inside the unzipped folder and choose **"Open in Terminal"** or **"Open PowerShell window here"**.
