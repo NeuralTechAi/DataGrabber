@@ -20,23 +20,36 @@ class BackgroundProcessor:
     
     def __init__(self):
         self.workers = {}  # Track active workers
-        self.max_workers = 3  # Maximum concurrent processing jobs
-        # Parallel file processing configuration
-        self.max_parallel_files = int(os.environ.get('PARALLEL_FILES', 3))  # Configurable via environment
+
+        # Concurrency: match the number of simultaneous API calls allowed in ai_service.py
+        _api_concurrency = int(os.environ.get('API_CONCURRENCY', 5))
+        self.max_workers = _api_concurrency          # job-level worker threads
+        self.max_parallel_files = _api_concurrency  # file-level worker threads
+
         self.progress_lock = Lock()  # Thread-safe progress updates
-        
+
         # **ABSOLUTE DUPLICATE PREVENTION SYSTEM**
-        self.processing_registry = {}  # Global registry to prevent ALL duplicates: {"project_id:filename": thread_id}
-        self.registry_lock = Lock()  # Lock for processing registry
-        
+        self.processing_registry = {}  # {project_id:filename → thread_id}
+        self.registry_lock = Lock()
+
         # Large-scale processing configuration
-        self.batch_size = int(os.environ.get('BATCH_SIZE', 100))  # Process files in batches
-        self.checkpoint_frequency = int(os.environ.get('CHECKPOINT_INTERVAL', 50)) // self.batch_size + 1  # Checkpoint every N batches
+        self.batch_size = int(os.environ.get('BATCH_SIZE', 100))
+        self.checkpoint_frequency = int(os.environ.get('CHECKPOINT_INTERVAL', 50)) // self.batch_size + 1
         self.app = None  # Will be set when needed for context
-        
-        logger.info(f"BackgroundProcessor initialized with {self.max_parallel_files} parallel file workers")
-        logger.info(f"Large-scale processing: batch_size={self.batch_size}, checkpoint_frequency={self.checkpoint_frequency}")
-        logger.info("ABSOLUTE DUPLICATE PREVENTION: Registry-based system enabled")
+
+        # ── Excel write buffer ────────────────────────────────────────────
+        # Instead of reading+writing the entire xlsx on every file (O(n²)),
+        # we buffer rows in memory and flush in bulk.  Each project gets its
+        # own lock so concurrent jobs for different projects don't collide.
+        self._excel_buffers: dict = {}       # {excel_path: [row_dict, ...]}
+        self._excel_locks:   dict = {}       # {excel_path: threading.Lock}
+        self._excel_meta_lock = Lock()       # guards the two dicts above
+        self._EXCEL_FLUSH_SIZE = int(os.environ.get('EXCEL_FLUSH_SIZE', 10))
+
+        logger.info(
+            f"BackgroundProcessor initialized: concurrency={_api_concurrency}, "
+            f"batch_size={self.batch_size}, excel_flush={self._EXCEL_FLUSH_SIZE}"
+        )
     
     def _get_supported_extensions(self):
         """Get the set of supported file extensions"""
@@ -517,38 +530,75 @@ class BackgroundProcessor:
                 logger.error(f"Error processing {filename} directly: {e}", exc_info=True)
                 return {'success': False, 'error': str(e), 'credits_used': 0}
     
-    def _update_excel_file_direct(self, project, merged_data, filename):
-        """Update Excel file directly without going through DocumentService"""
+    # ── Excel helpers ──────────────────────────────────────────────────────
+
+    def _get_excel_lock(self, excel_path: str) -> Lock:
+        """Return (creating if necessary) the per-file write lock."""
+        with self._excel_meta_lock:
+            if excel_path not in self._excel_locks:
+                self._excel_locks[excel_path] = Lock()
+                self._excel_buffers[excel_path] = []
+            return self._excel_locks[excel_path]
+
+    def _update_excel_file_direct(self, project, merged_data: dict, filename: str):
+        """Buffer one row and flush to disk when the buffer is full.
+
+        Uses openpyxl in append mode instead of pandas read-entire-file-write,
+        cutting Excel I/O from O(n²) to O(1) per file (amortised O(n/flush_size)).
+        """
         try:
-            import pandas as pd
-            from datetime import datetime
-            
             excel_path = os.path.join(project.storage_path, "extracted_data.xlsx")
-            
-            # Prepare row data
-            row_data = merged_data.copy()
-            row_data['filename'] = filename
-            row_data['extracted_date'] = datetime.utcnow().isoformat()
-            
-            # Read existing data or create new DataFrame
+            row_data = {**merged_data, 'filename': filename,
+                        'extracted_date': datetime.utcnow().isoformat()}
+
+            lock = self._get_excel_lock(excel_path)
+            with lock:
+                self._excel_buffers[excel_path].append(row_data)
+                if len(self._excel_buffers[excel_path]) >= self._EXCEL_FLUSH_SIZE:
+                    self._flush_excel_buffer(excel_path, project.fields)
+        except Exception as e:
+            logger.error(f"Error buffering Excel row for {filename}: {e}", exc_info=True)
+
+    def _flush_excel_buffer(self, excel_path: str, fields: list):
+        """Write all buffered rows to the xlsx file using openpyxl (called under lock)."""
+        rows = self._excel_buffers.get(excel_path, [])
+        if not rows:
+            return
+        try:
+            from openpyxl import load_workbook, Workbook
+
+            # Column order: user fields first, then metadata
+            col_names = [f['name'] for f in fields] + ['filename', 'extracted_date']
+
             if os.path.exists(excel_path):
                 try:
-                    existing_df = pd.read_excel(excel_path)
-                    # Append new row
-                    new_df = pd.concat([existing_df, pd.DataFrame([row_data])], ignore_index=True)
-                except Exception as e:
-                    logger.warning(f"Could not read existing Excel file {excel_path}: {e}, creating new one")
-                    new_df = pd.DataFrame([row_data])
+                    wb = load_workbook(excel_path)
+                    ws = wb.active
+                except Exception:
+                    wb = Workbook()
+                    ws = wb.active
+                    ws.append(col_names)
             else:
-                new_df = pd.DataFrame([row_data])
-            
-            # Write updated DataFrame to Excel
-            new_df.to_excel(excel_path, index=False)
-            logger.debug(f"Updated Excel file {excel_path} with data from {filename}")
-            
+                wb = Workbook()
+                ws = wb.active
+                ws.append(col_names)
+
+            for row in rows:
+                ws.append([str(row.get(c, '')) for c in col_names])
+
+            os.makedirs(os.path.dirname(excel_path), exist_ok=True)
+            wb.save(excel_path)
+            self._excel_buffers[excel_path] = []
+            logger.debug(f"Flushed {len(rows)} rows → {excel_path}")
         except Exception as e:
-            logger.error(f"Error updating Excel file for {filename}: {e}", exc_info=True)
-            # Don't fail the entire operation if Excel update fails
+            logger.error(f"Error flushing Excel buffer to {excel_path}: {e}", exc_info=True)
+
+    def _flush_all_excel_buffers_for_project(self, project):
+        """Flush any remaining buffered rows at job completion."""
+        excel_path = os.path.join(project.storage_path, "extracted_data.xlsx")
+        lock = self._get_excel_lock(excel_path)
+        with lock:
+            self._flush_excel_buffer(excel_path, project.fields)
     
     def _process_job_worker(self, job_id):
         """Worker thread for processing a job"""
@@ -848,7 +898,15 @@ class BackgroundProcessor:
         """Complete folder processing with final statistics and cleanup"""
         try:
             logger.info(f"Completing folder processing for job {job.id}")
-            
+
+            # Flush any remaining buffered Excel rows before marking complete
+            try:
+                project = job.project
+                if project:
+                    self._flush_all_excel_buffers_for_project(project)
+            except Exception as flush_err:
+                logger.warning(f"Excel flush at folder completion: {flush_err}")
+
             # Final progress update with absolute values
             job.update_progress(
                 processed=processed,
@@ -1001,10 +1059,7 @@ class BackgroundProcessor:
                             credits_used=total_credits_used,
                             absolute=True
                         )
-                        
-                        # Small delay to allow progress monitoring
-                        time.sleep(0.1)
-                        
+
                     except Exception as file_error:
                         logger.error(f"Error processing file {filename}: {file_error}")
                         total_failed += 1
@@ -1024,6 +1079,14 @@ class BackgroundProcessor:
         """Complete file processing with final statistics"""
         try:
             logger.info(f"Completing file processing for job {job.id}")
+
+            # Flush any remaining buffered Excel rows
+            try:
+                project = job.project
+                if project:
+                    self._flush_all_excel_buffers_for_project(project)
+            except Exception as flush_err:
+                logger.warning(f"Excel flush at file completion: {flush_err}")
             
             # Create summary message
             total_files = processed + failed + skipped

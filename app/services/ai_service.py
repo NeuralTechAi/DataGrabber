@@ -9,16 +9,20 @@ import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
-# One API call at a time across all parallel workers.
-# This prevents simultaneous requests from blowing through rate limits.
-_api_semaphore = threading.Semaphore(1)
+# How many AI API calls may be in-flight simultaneously.
+# Raise this if your API tier supports higher throughput (e.g. OpenAI Tier 2+).
+# Lower it if you hit persistent 429 rate-limit errors.
+# Default 5 is safe for Gemini free (15 RPM) and OpenAI Tier 1 (500 RPM).
+_API_CONCURRENCY = int(os.getenv("API_CONCURRENCY", 5))
+_api_semaphore = threading.Semaphore(_API_CONCURRENCY)
 
 
-def _call_with_backoff(fn, max_retries: int = 6, base_delay: float = 3.0):
+def _call_with_backoff(fn, max_retries: int = 4, base_delay: float = 1.0):
     """Execute fn() inside the global API semaphore with exponential-backoff retry.
 
     Retries on HTTP 429 (rate limit) and transient 5xx errors.
-    Delays: ~3s, ~6s, ~12s, ~24s, ~48s, ~96s before giving up.
+    Delays: ~1s, ~2s, ~4s, ~8s before giving up (was 3/6/12/24/48/96s).
+    Concurrency is controlled by _api_semaphore (default 5 simultaneous calls).
     """
     last_exc = None
     for attempt in range(max_retries + 1):
