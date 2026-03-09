@@ -1,0 +1,1238 @@
+{% extends "layout.html" %} {% block title %}My Profile - DataGrabber{% endblock
+%} {% block styles %}
+<style>
+  .profile-header {
+    background: linear-gradient(
+      135deg,
+      rgba(59, 130, 246, 0.1),
+      rgba(139, 92, 246, 0.1)
+    );
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+
+  .avatar-container {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: linear-gradient(
+      135deg,
+      var(--primary-blue),
+      var(--accent-purple)
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 3rem;
+    margin-right: 2rem;
+    box-shadow: var(--shadow-md);
+  }
+
+  .profile-stats {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1rem;
+  }
+
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-blue);
+  }
+
+  .stat-label {
+    color: var(--gray-500);
+    font-size: 0.875rem;
+  }
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    position: relative;
+    padding-bottom: 0.75rem;
+  }
+
+  .section-title::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 50px;
+    height: 3px;
+    background: linear-gradient(
+      90deg,
+      var(--primary-blue),
+      var(--accent-purple)
+    );
+  }
+
+  .activity-card {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+  }
+
+  .activity-item {
+    position: relative;
+    padding: 1rem 1rem 1rem 3rem;
+    transition: all 0.2s ease;
+  }
+
+  .activity-item:not(:last-child) {
+    border-bottom: 1px solid var(--gray-200);
+  }
+
+  .activity-item:hover {
+    background-color: var(--gray-50);
+  }
+
+  .activity-icon {
+    position: absolute;
+    left: 1rem;
+    top: 1.2rem;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.75rem;
+  }
+
+  .icon-usage {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+  }
+  
+  #globalAlertContainer {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    min-width: 300px;
+    max-width: 500px;
+  }
+  
+  #globalAlertContainer .alert {
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    animation: slideDown 0.3s ease-out forwards;
+  }
+  
+  @keyframes slideDown {
+    0% {
+      transform: translateY(-20px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  
+  .btn-connect {
+    transition: all 0.3s ease;
+  }
+  
+  .disconnect-btn {
+    transition: all 0.2s ease;
+  }
+  
+  .disconnect-btn:hover {
+    transform: scale(1.1);
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="profile-header">
+  <div class="d-flex flex-column flex-md-row align-items-md-center">
+    <div class="avatar-container mb-3 mb-md-0">
+      {{ user.username[0] | upper }}
+    </div>
+    <div>
+      <h1 class="mb-1">{{ user.username }}</h1>
+      <p class="text-muted mb-2">{{ user.email }}</p>
+      <div class="profile-stats">
+        <div class="stat-item">
+          <div class="stat-value">
+            {{ user.created_at.strftime('%Y-%m-%d') }}
+          </div>
+          <div class="stat-label">Joined</div>
+        </div>
+      </div>
+    </div>
+    <div class="ms-auto mt-3 mt-md-0">
+      <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteAccountModal">
+        <i class="fas fa-user-times me-2"></i> Delete Account
+      </button>
+    </div>
+  </div>
+</div>
+<div class="row g-4">
+  <div class="col-md-7">
+    <h3 class="section-title">
+      <i class="fas fa-key me-2 text-primary"></i> Account Security
+    </h3>
+
+    <div class="card mb-4">
+      <div class="card-body">
+        <form id="passwordChangeForm" action="{{ url_for('user.change_password') }}" method="post">
+          <div class="mb-3">
+            <label for="currentPassword" class="form-label"
+              >Current Password</label
+            >
+            <input
+              type="password"
+              class="form-control"
+              id="currentPassword"
+              name="currentPassword"
+              required
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="newPassword" class="form-label">New Password</label>
+            <input
+              type="password"
+              class="form-control"
+              id="newPassword"
+              name="newPassword"
+              required
+            />
+            <div class="form-text">
+              Password must be at least 8 characters long
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label for="confirmPassword" class="form-label"
+              >Confirm New Password</label
+            >
+            <input
+              type="password"
+              class="form-control"
+              id="confirmPassword"
+              name="confirmPassword"
+              required
+            />
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="updatePasswordBtn">
+            <i class="fas fa-save me-2"></i> Update Password
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <h3 class="section-title">
+      <i class="fas fa-bell me-2 text-primary"></i> Notification Settings (Coming Soon) 
+    </h3>
+
+    <div class="card">
+      <div class="card-body">
+        <form action="#" method="post">
+          <div class="form-check form-switch mb-3">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="emailProcessingComplete"
+              checked
+            />
+            <label class="form-check-label" for="emailProcessingComplete"
+              >Email me when document processing completes</label
+            >
+          </div>
+
+          <div class="form-check form-switch mb-4">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="emailMarketing"
+            />
+            <label class="form-check-label" for="emailMarketing"
+              >Receive product updates and offers</label
+            >
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save me-2"></i> Save Preferences
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-5">
+    <h3 class="section-title">
+      <i class="fas fa-link me-2 text-primary"></i> Connected Services (Coming Soon)
+    </h3>
+
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h5 class="mb-1">Google Drive</h5>
+            <p class="text-muted small mb-0">
+              Process files directly from Google Drive without copying
+            </p>
+          </div>
+          <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#googleDriveModal">
+            <i class="fab fa-google-drive me-1"></i> Connect
+          </button>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h5 class="mb-1">Dropbox</h5>
+            <p class="text-muted small mb-0">
+              Process files directly from Dropbox without copying
+            </p>
+          </div>
+          <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#dropboxModal">
+            <i class="fab fa-dropbox me-1"></i> Connect
+          </button>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h5 class="mb-1">OneDrive</h5>
+            <p class="text-muted small mb-0">
+              Process files directly from OneDrive without copying
+            </p>
+          </div>
+          <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#oneDriveModal">
+            <i class="fab fa-microsoft me-1"></i> Connect
+          </button>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h5 class="mb-1">AWS S3 Bucket</h5>
+            <p class="text-muted small mb-0">
+              Process files directly from S3 without copying
+            </p>
+          </div>
+          <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#s3Modal">
+            <i class="fab fa-aws me-1"></i> Connect
+          </button>
+        </div>
+
+        <div class="mt-3 pt-3 border-top">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="directProcessingSwitch" checked>
+            <label class="form-check-label" for="directProcessingSwitch">
+              Direct file processing (no copies stored in memory)
+            </label>
+            <small class="d-block text-muted mt-1">
+              <i class="fas fa-shield-alt me-1"></i> Securely process files directly without copying data to servers
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="section-title">
+      <i class="fas fa-history me-2 text-primary"></i> Recent Activity
+    </h3>
+
+    <div class="activity-card">
+      <div class="list-group list-group-flush">
+        <div class="activity-item">
+          <span class="activity-icon icon-usage">
+            <i class="fas fa-file-alt"></i>
+          </span>
+          <div>
+            <p class="mb-1 fw-semibold">Processed 5 pages</p>
+            <p class="text-muted small mb-0">{{ activity_dates.activity2 }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Cloud Service Connection Modals -->
+<!-- Google Drive Modal -->
+<div class="modal fade" id="googleDriveModal" tabindex="-1" aria-labelledby="googleDriveModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title" id="googleDriveModalLabel">
+          <i class="fab fa-google-drive text-primary me-2"></i> Connect to Google Drive
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Connect your Google Drive account to process files directly without storing copies on our servers.</p>
+        
+        <div class="alert alert-info">
+          <div class="d-flex">
+            <div class="me-3">
+              <i class="fas fa-shield-alt fa-2x text-primary"></i>
+            </div>
+            <div>
+              <strong>Direct Processing</strong>
+              <p class="mb-0 small">Files are processed directly through secure API connections. No copies are stored in memory or on servers.</p>
+            </div>
+          </div>
+        </div>
+        
+        <form id="googleDriveConnectionForm">
+          <div class="mb-3">
+            <label for="googleDriveClientId" class="form-label">OAuth Client ID</label>
+            <input type="text" class="form-control" id="googleDriveClientId" placeholder="Your Google OAuth Client ID">
+            <small class="form-text text-muted">Create credentials at <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></small>
+          </div>
+          
+          <div class="mb-3">
+            <label for="googleDriveClientSecret" class="form-label">OAuth Client Secret</label>
+            <input type="password" class="form-control" id="googleDriveClientSecret" placeholder="Your Google OAuth Client Secret">
+          </div>
+          
+          <div class="mb-3">
+            <label for="googleDriveRedirectUri" class="form-label">Redirect URI</label>
+            <input type="text" class="form-control" id="googleDriveRedirectUri" value="https://yourdomain.com/auth/google/callback" readonly>
+            <small class="form-text text-muted">Add this URI to your OAuth consent screen authorized redirects</small>
+          </div>
+        </form>
+        
+        <h6 class="mt-3 mb-2">You'll be able to:</h6>
+        <ul class="small">
+          <li>Select files directly from your Google Drive</li>
+          <li>Process documents without downloading</li>
+          <li>Save extracted data back to Google Drive</li>
+          <li>Maintain complete data ownership</li>
+        </ul>
+        
+        <div class="form-check mt-3">
+          <input class="form-check-input" type="checkbox" id="googleDriveConsent" checked>
+          <label class="form-check-label small" for="googleDriveConsent">
+            I understand that DataGrabber will only request read/write access to files I explicitly select
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="googleDriveConnectBtn">
+          <i class="fab fa-google-drive me-1"></i> Connect with Google
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Dropbox Modal -->
+<div class="modal fade" id="dropboxModal" tabindex="-1" aria-labelledby="dropboxModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title" id="dropboxModalLabel">
+          <i class="fab fa-dropbox text-primary me-2"></i> Connect to Dropbox
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Connect your Dropbox account to process files directly without storing copies on our servers.</p>
+        
+        <div class="alert alert-info">
+          <div class="d-flex">
+            <div class="me-3">
+              <i class="fas fa-shield-alt fa-2x text-primary"></i>
+            </div>
+            <div>
+              <strong>Direct Processing</strong>
+              <p class="mb-0 small">Files are processed directly through secure API connections. No copies are stored in memory or on servers.</p>
+            </div>
+          </div>
+        </div>
+        
+        <form id="dropboxConnectionForm">
+          <div class="mb-3">
+            <label for="dropboxAppKey" class="form-label">App Key</label>
+            <input type="text" class="form-control" id="dropboxAppKey" placeholder="Your Dropbox App Key">
+            <small class="form-text text-muted">Create an app at <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox Developer Console</a></small>
+          </div>
+          
+          <div class="mb-3">
+            <label for="dropboxAppSecret" class="form-label">App Secret</label>
+            <input type="password" class="form-control" id="dropboxAppSecret" placeholder="Your Dropbox App Secret">
+          </div>
+          
+          <div class="mb-3">
+            <label for="dropboxRedirectUri" class="form-label">Redirect URI</label>
+            <input type="text" class="form-control" id="dropboxRedirectUri" value="https://yourdomain.com/auth/dropbox/callback" readonly>
+            <small class="form-text text-muted">Add this URI to your app's OAuth redirect URIs</small>
+          </div>
+        </form>
+        
+        <h6 class="mt-3 mb-2">You'll be able to:</h6>
+        <ul class="small">
+          <li>Select files directly from your Dropbox</li>
+          <li>Process documents without downloading</li>
+          <li>Save extracted data back to Dropbox</li>
+          <li>Maintain complete data ownership</li>
+        </ul>
+        
+        <div class="form-check mt-3">
+          <input class="form-check-input" type="checkbox" id="dropboxConsent" checked>
+          <label class="form-check-label small" for="dropboxConsent">
+            I understand that DataGrabber will only request read/write access to files I explicitly select
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="dropboxConnectBtn">
+          <i class="fab fa-dropbox me-1"></i> Connect with Dropbox
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OneDrive Modal -->
+<div class="modal fade" id="oneDriveModal" tabindex="-1" aria-labelledby="oneDriveModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title" id="oneDriveModalLabel">
+          <i class="fab fa-microsoft text-primary me-2"></i> Connect to OneDrive
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Connect your OneDrive account to process files directly without storing copies on our servers.</p>
+        
+        <div class="alert alert-info">
+          <div class="d-flex">
+            <div class="me-3">
+              <i class="fas fa-shield-alt fa-2x text-primary"></i>
+            </div>
+            <div>
+              <strong>Direct Processing</strong>
+              <p class="mb-0 small">Files are processed directly through secure API connections. No copies are stored in memory or on servers.</p>
+            </div>
+          </div>
+        </div>
+        
+        <form id="oneDriveConnectionForm">
+          <div class="mb-3">
+            <label for="oneDriveClientId" class="form-label">Application (Client) ID</label>
+            <input type="text" class="form-control" id="oneDriveClientId" placeholder="Your Microsoft App ID">
+            <small class="form-text text-muted">Register an app at <a href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank">Azure Portal</a></small>
+          </div>
+          
+          <div class="mb-3">
+            <label for="oneDriveClientSecret" class="form-label">Client Secret</label>
+            <input type="password" class="form-control" id="oneDriveClientSecret" placeholder="Your Microsoft Client Secret">
+          </div>
+          
+          <div class="mb-3">
+            <label for="oneDriveTenantId" class="form-label">Tenant ID (optional)</label>
+            <input type="text" class="form-control" id="oneDriveTenantId" placeholder="Optional for Microsoft 365 Business">
+          </div>
+          
+          <div class="mb-3">
+            <label for="oneDriveRedirectUri" class="form-label">Redirect URI</label>
+            <input type="text" class="form-control" id="oneDriveRedirectUri" value="https://yourdomain.com/auth/onedrive/callback" readonly>
+            <small class="form-text text-muted">Add this URI to your app's Authentication settings</small>
+          </div>
+        </form>
+        
+        <h6 class="mt-3 mb-2">You'll be able to:</h6>
+        <ul class="small">
+          <li>Select files directly from your OneDrive</li>
+          <li>Process documents without downloading</li>
+          <li>Save extracted data back to OneDrive</li>
+          <li>Maintain complete data ownership</li>
+        </ul>
+        
+        <div class="form-check mt-3">
+          <input class="form-check-input" type="checkbox" id="oneDriveConsent" checked>
+          <label class="form-check-label small" for="oneDriveConsent">
+            I understand that DataGrabber will only request read/write access to files I explicitly select
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="oneDriveConnectBtn">
+          <i class="fab fa-microsoft me-1"></i> Connect with Microsoft
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AWS S3 Modal -->
+<div class="modal fade" id="s3Modal" tabindex="-1" aria-labelledby="s3ModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title" id="s3ModalLabel">
+          <i class="fab fa-aws text-primary me-2"></i> Connect to AWS S3 Bucket
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Connect your AWS S3 bucket to process files directly without storing copies on our servers.</p>
+        
+        <div class="alert alert-info">
+          <div class="d-flex">
+            <div class="me-3">
+              <i class="fas fa-shield-alt fa-2x text-primary"></i>
+            </div>
+            <div>
+              <strong>Direct Processing</strong>
+              <p class="mb-0 small">Files are processed directly through secure API connections. No copies are stored in memory or on servers.</p>
+            </div>
+          </div>
+        </div>
+        
+        <form id="s3ConnectionForm">
+          <div class="mb-3">
+            <label for="s3Region" class="form-label">AWS Region</label>
+            <input type="text" class="form-control" id="s3Region" placeholder="e.g., us-east-1">
+          </div>
+          <div class="mb-3">
+            <label for="s3BucketName" class="form-label">Bucket Name</label>
+            <input type="text" class="form-control" id="s3BucketName" placeholder="your-bucket-name">
+          </div>
+          <div class="mb-3">
+            <label for="s3AccessKey" class="form-label">Access Key ID</label>
+            <input type="text" class="form-control" id="s3AccessKey">
+            <small class="form-text text-muted">We recommend using IAM roles with limited permissions</small>
+          </div>
+          <div class="mb-3">
+            <label for="s3SecretKey" class="form-label">Secret Access Key</label>
+            <input type="password" class="form-control" id="s3SecretKey">
+          </div>
+          
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="s3UseIamRole">
+            <label class="form-check-label" for="s3UseIamRole">
+              Use IAM Role (for EC2/ECS deployments)
+            </label>
+          </div>
+          
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="s3Consent" checked>
+            <label class="form-check-label small" for="s3Consent">
+              I understand that DataGrabber will only access files I explicitly select
+            </label>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="s3ConnectBtn">
+          <i class="fab fa-aws me-1"></i> Connect S3 Bucket
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Check for previously connected cloud services
+    checkCloudServiceConnections();
+    
+    // Password change functionality
+    const passwordForm = document.getElementById('passwordChangeForm');
+    const updateBtn = document.getElementById('updatePasswordBtn');
+    
+    if (passwordForm) {
+        passwordForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(passwordForm);
+            const newPassword = formData.get('newPassword');
+            const confirmPassword = formData.get('confirmPassword');
+            
+            // Client-side validation
+            if (newPassword !== confirmPassword) {
+                showFormAlert(passwordForm, 'New passwords do not match', 'danger');
+                return;
+            }
+            
+            if (newPassword.length < 8) {
+                showFormAlert(passwordForm, 'Password must be at least 8 characters long', 'danger');
+                return;
+            }
+            
+            // Disable button and show loading
+            updateBtn.disabled = true;
+            updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Updating...';
+            
+            // Send AJAX request
+            fetch(passwordForm.action, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showFormAlert(passwordForm, data.message, 'success');
+                    passwordForm.reset();
+                } else {
+                    showFormAlert(passwordForm, data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showFormAlert(passwordForm, 'An error occurred while updating password', 'danger');
+            })
+            .finally(() => {
+                // Re-enable button
+                updateBtn.disabled = false;
+                updateBtn.innerHTML = '<i class="fas fa-save me-2"></i> Update Password';
+            });
+        });
+    }
+    
+    // Cloud Services Connection Functionality
+    setupCloudServiceConnections();
+    
+    // Direct Processing Switch
+    const directProcessingSwitch = document.getElementById('directProcessingSwitch');
+    if (directProcessingSwitch) {
+        directProcessingSwitch.addEventListener('change', function() {
+            const isDirectProcessing = this.checked;
+            localStorage.setItem('directProcessing', isDirectProcessing);
+            
+            // Show notification
+            const message = isDirectProcessing ? 
+                'Direct processing enabled. Files will be processed without copying to memory.' : 
+                'Direct processing disabled. Files will be temporarily stored in memory.';
+            const type = isDirectProcessing ? 'success' : 'warning';
+            
+            showGlobalAlert(message, type);
+        });
+    }
+    
+    // Helper Functions
+    function showFormAlert(form, message, type) {
+        // Remove existing alerts
+        const existingAlerts = form.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        // Create new alert
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        // Insert alert at the top of the form
+        form.insertBefore(alertDiv, form.firstChild);
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+    
+    function showGlobalAlert(message, type) {
+        // Create container if it doesn't exist
+        let alertContainer = document.getElementById('globalAlertContainer');
+        if (!alertContainer) {
+            alertContainer = document.createElement('div');
+            alertContainer.id = 'globalAlertContainer';
+            alertContainer.className = 'position-fixed top-0 start-50 translate-middle-x p-3';
+            alertContainer.style.zIndex = '9999';
+            document.body.appendChild(alertContainer);
+        }
+        
+        // Create alert
+        const alertId = 'alert-' + Date.now();
+        const alertDiv = document.createElement('div');
+        alertDiv.id = alertId;
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        // Add to container
+        alertContainer.appendChild(alertDiv);
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            const alert = document.getElementById(alertId);
+            if (alert) {
+                alert.remove();
+            }
+        }, 5000);
+    }
+    
+    function setupCloudServiceConnections() {
+        // Google Drive Connection
+        const googleDriveConnectBtn = document.getElementById('googleDriveConnectBtn');
+        if (googleDriveConnectBtn) {
+            googleDriveConnectBtn.addEventListener('click', function() {
+                // Form validation
+                const clientId = document.getElementById('googleDriveClientId').value;
+                const clientSecret = document.getElementById('googleDriveClientSecret').value;
+                const consent = document.getElementById('googleDriveConsent').checked;
+                
+                if (!clientId || !clientSecret) {
+                    showGlobalAlert('Please enter your Google API credentials', 'warning');
+                    return;
+                }
+                
+                if (!consent) {
+                    showGlobalAlert('Please check the consent box to continue', 'warning');
+                    return;
+                }
+                
+                // Show connecting status
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Connecting...';
+                
+                // Simulate OAuth flow (in production, this would redirect to Google OAuth)
+                setTimeout(() => {
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('googleDriveModal'));
+                    modal.hide();
+                    
+                    // Reset button
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fab fa-google-drive me-1"></i> Connect with Google';
+                    
+                    // Update UI to show connected state
+                    updateCloudServiceUI('Google Drive', true);
+                    
+                    // Store credentials (in a real app, you'd securely transmit these to the server)
+                    localStorage.setItem('googleDriveCredentials', JSON.stringify({
+                        clientId: clientId,
+                        timestamp: new Date().toISOString()
+                    }));
+                    
+                    // Show success message
+                    showGlobalAlert('Successfully connected to Google Drive. You can now process files directly.', 'success');
+                }, 1500);
+            });
+        }
+        
+        // Dropbox Connection
+        const dropboxConnectBtn = document.getElementById('dropboxConnectBtn');
+        if (dropboxConnectBtn) {
+            dropboxConnectBtn.addEventListener('click', function() {
+                // Form validation
+                const appKey = document.getElementById('dropboxAppKey').value;
+                const appSecret = document.getElementById('dropboxAppSecret').value;
+                const consent = document.getElementById('dropboxConsent').checked;
+                
+                if (!appKey || !appSecret) {
+                    showGlobalAlert('Please enter your Dropbox API credentials', 'warning');
+                    return;
+                }
+                
+                if (!consent) {
+                    showGlobalAlert('Please check the consent box to continue', 'warning');
+                    return;
+                }
+                
+                // Show connecting status
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Connecting...';
+                
+                // Simulate OAuth flow
+                setTimeout(() => {
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('dropboxModal'));
+                    modal.hide();
+                    
+                    // Reset button
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fab fa-dropbox me-1"></i> Connect with Dropbox';
+                    
+                    // Update UI to show connected state
+                    updateCloudServiceUI('Dropbox', true);
+                    
+                    // Store credentials (in a real app, you'd securely transmit these to the server)
+                    localStorage.setItem('dropboxCredentials', JSON.stringify({
+                        appKey: appKey,
+                        timestamp: new Date().toISOString()
+                    }));
+                    
+                    // Show success message
+                    showGlobalAlert('Successfully connected to Dropbox. You can now process files directly.', 'success');
+                }, 1500);
+            });
+        }
+        
+        // OneDrive Connection
+        const oneDriveConnectBtn = document.getElementById('oneDriveConnectBtn');
+        if (oneDriveConnectBtn) {
+            oneDriveConnectBtn.addEventListener('click', function() {
+                // Form validation
+                const clientId = document.getElementById('oneDriveClientId').value;
+                const clientSecret = document.getElementById('oneDriveClientSecret').value;
+                const tenantId = document.getElementById('oneDriveTenantId').value;
+                const consent = document.getElementById('oneDriveConsent').checked;
+                
+                if (!clientId || !clientSecret) {
+                    showGlobalAlert('Please enter your Microsoft API credentials', 'warning');
+                    return;
+                }
+                
+                if (!consent) {
+                    showGlobalAlert('Please check the consent box to continue', 'warning');
+                    return;
+                }
+                
+                // Show connecting status
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Connecting...';
+                
+                // Simulate OAuth flow
+                setTimeout(() => {
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('oneDriveModal'));
+                    modal.hide();
+                    
+                    // Reset button
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fab fa-microsoft me-1"></i> Connect with Microsoft';
+                    
+                    // Update UI to show connected state
+                    updateCloudServiceUI('OneDrive', true);
+                    
+                    // Store credentials (in a real app, you'd securely transmit these to the server)
+                    localStorage.setItem('oneDriveCredentials', JSON.stringify({
+                        clientId: clientId,
+                        tenantId: tenantId || 'common',
+                        timestamp: new Date().toISOString()
+                    }));
+                    
+                    // Show success message
+                    showGlobalAlert('Successfully connected to OneDrive. You can now process files directly.', 'success');
+                }, 1500);
+            });
+        }
+        
+        // AWS S3 Connection
+        const s3ConnectBtn = document.getElementById('s3ConnectBtn');
+        if (s3ConnectBtn) {
+            s3ConnectBtn.addEventListener('click', function() {
+                // Form validation
+                const region = document.getElementById('s3Region').value;
+                const bucketName = document.getElementById('s3BucketName').value;
+                const useIamRole = document.getElementById('s3UseIamRole').checked;
+                const accessKey = document.getElementById('s3AccessKey').value;
+                const secretKey = document.getElementById('s3SecretKey').value;
+                const consent = document.getElementById('s3Consent').checked;
+                
+                if (!consent) {
+                    showGlobalAlert('Please check the consent box to continue', 'warning');
+                    return;
+                }
+                
+                if (!bucketName) {
+                    showGlobalAlert('Bucket name is required', 'warning');
+                    return;
+                }
+                
+                if (!useIamRole && (!accessKey || !secretKey)) {
+                    showGlobalAlert('Access Key and Secret Key are required unless using IAM Role', 'warning');
+                    return;
+                }
+                
+                // Show connecting status
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Connecting...';
+                
+                // Simulate connection
+                setTimeout(() => {
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('s3Modal'));
+                    modal.hide();
+                    
+                    // Reset button
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fab fa-aws me-1"></i> Connect S3 Bucket';
+                    
+                    // Update UI to show connected state
+                    updateCloudServiceUI('AWS S3', true);
+                    
+                    // Store credentials (in a real app, you'd securely transmit these to the server)
+                    localStorage.setItem('s3Credentials', JSON.stringify({
+                        region: region,
+                        bucketName: bucketName,
+                        useIamRole: useIamRole,
+                        accessKey: useIamRole ? null : accessKey,
+                        timestamp: new Date().toISOString()
+                    }));
+                    
+                    // Show success message
+                    showGlobalAlert(`Successfully connected to S3 bucket: ${bucketName}. You can now process files directly.`, 'success');
+                }, 1500);
+            });
+        }
+    }
+    
+    function checkCloudServiceConnections() {
+        // Check each cloud service for existing connections
+        const services = [
+            { name: 'Google Drive', storageKey: 'googleDriveCredentials' },
+            { name: 'Dropbox', storageKey: 'dropboxCredentials' },
+            { name: 'OneDrive', storageKey: 'oneDriveCredentials' },
+            { name: 'AWS S3', storageKey: 's3Credentials' }
+        ];
+        
+        // Check direct processing setting
+        const directProcessingSwitch = document.getElementById('directProcessingSwitch');
+        if (directProcessingSwitch) {
+            const savedSetting = localStorage.getItem('directProcessing');
+            if (savedSetting !== null) {
+                directProcessingSwitch.checked = savedSetting === 'true';
+            }
+        }
+        
+        // Check for connected services
+        services.forEach(service => {
+            const credentials = localStorage.getItem(service.storageKey);
+            if (credentials) {
+                try {
+                    const data = JSON.parse(credentials);
+                    const timestamp = new Date(data.timestamp);
+                    const now = new Date();
+                    
+                    // Check if credentials are less than 30 days old (arbitrary expiration)
+                    const daysDiff = (now - timestamp) / (1000 * 60 * 60 * 24);
+                    if (daysDiff < 30) {
+                        // Valid credentials, update UI
+                        updateCloudServiceUI(service.name, true);
+                    } else {
+                        // Expired credentials, remove them
+                        localStorage.removeItem(service.storageKey);
+                    }
+                } catch (e) {
+                    // Invalid JSON, remove the item
+                    localStorage.removeItem(service.storageKey);
+                }
+            }
+        });
+    }
+    
+    function updateCloudServiceUI(serviceName, isConnected) {
+        // Find the button for this service
+        const serviceButtons = document.querySelectorAll('.card button');
+        let serviceButton = null;
+        
+        for (const button of serviceButtons) {
+            if (button.innerText.includes(serviceName)) {
+                serviceButton = button;
+                break;
+            }
+        }
+        
+        if (serviceButton) {
+            // Update button style and text
+            if (isConnected) {
+                serviceButton.classList.remove('btn-primary');
+                serviceButton.classList.add('btn-success');
+                serviceButton.innerHTML = '<i class="fas fa-check me-1"></i> Connected';
+                
+                // Add disconnect option
+                const parentDiv = serviceButton.parentElement;
+                
+                // Check if disconnect button already exists
+                let disconnectBtn = parentDiv.querySelector('.disconnect-btn');
+                if (!disconnectBtn) {
+                    disconnectBtn = document.createElement('button');
+                    disconnectBtn.className = 'btn btn-sm btn-outline-danger ms-2 disconnect-btn';
+                    disconnectBtn.innerHTML = '<i class="fas fa-unlink"></i>';
+                    disconnectBtn.title = 'Disconnect';
+                    disconnectBtn.setAttribute('data-service', serviceName);
+                    
+                    // Add disconnect functionality
+                    disconnectBtn.addEventListener('click', function() {
+                        const service = this.getAttribute('data-service');
+                        updateCloudServiceUI(service, false);
+                        
+                        // Clear stored credentials
+                        if (service === 'Google Drive') {
+                            localStorage.removeItem('googleDriveCredentials');
+                        } else if (service === 'Dropbox') {
+                            localStorage.removeItem('dropboxCredentials');
+                        } else if (service === 'OneDrive') {
+                            localStorage.removeItem('oneDriveCredentials');
+                        } else if (service === 'AWS S3') {
+                            localStorage.removeItem('s3Credentials');
+                        }
+                        
+                        showGlobalAlert(`Disconnected from ${service}`, 'info');
+                    });
+                    
+                    parentDiv.appendChild(disconnectBtn);
+                }
+            } else {
+                // Reset to unconnected state
+                serviceButton.classList.remove('btn-success');
+                serviceButton.classList.add('btn-primary');
+                
+                if (serviceName === 'Google Drive') {
+                    serviceButton.innerHTML = '<i class="fab fa-google-drive me-1"></i> Connect';
+                } else if (serviceName === 'Dropbox') {
+                    serviceButton.innerHTML = '<i class="fab fa-dropbox me-1"></i> Connect';
+                } else if (serviceName === 'OneDrive') {
+                    serviceButton.innerHTML = '<i class="fab fa-microsoft me-1"></i> Connect';
+                } else if (serviceName === 'AWS S3') {
+                    serviceButton.innerHTML = '<i class="fab fa-aws me-1"></i> Connect';
+                }
+                
+                // Remove disconnect button
+                const parentDiv = serviceButton.parentElement;
+                const disconnectBtn = parentDiv.querySelector('.disconnect-btn');
+                if (disconnectBtn) {
+                    disconnectBtn.remove();
+                }
+            }
+        }
+    }
+});
+
+// Initialize Delete Account Modal functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const confirmDeleteEmail = document.getElementById('confirmDeleteEmail');
+  const confirmDeleteCheck = document.getElementById('confirmDeleteCheck');
+  const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+  
+  // Enable/disable delete button based on confirmation - optimized version
+  function updateDeleteButton() {
+    // Use simplified validation for better performance
+    const emailValid = confirmDeleteEmail.value.trim().length > 0;
+    const checkboxChecked = confirmDeleteCheck.checked;
+    
+    confirmDeleteBtn.disabled = !(emailValid && checkboxChecked);
+  }
+  
+  // Optimize validation with debounce to reduce processing frequency
+  let debounceTimeout;
+  function debouncedUpdateButton() {
+    clearTimeout(debounceTimeout);
+    debounceTimeout = setTimeout(updateDeleteButton, 100);
+  }
+  
+  // Add event listeners with optimized validation
+  if (confirmDeleteEmail) {
+    confirmDeleteEmail.addEventListener('input', debouncedUpdateButton);
+  }
+  
+  if (confirmDeleteCheck) {
+    confirmDeleteCheck.addEventListener('change', updateDeleteButton);
+  }
+  
+  // Add submit event for delete button with improved performance
+  if (confirmDeleteBtn) {
+    confirmDeleteBtn.addEventListener('click', function() {
+      // Verify email match on submission to avoid continuous validation
+      if (confirmDeleteEmail.value.trim() !== '{{ user.email }}') {
+        showGlobalAlert('Please enter your correct email address.', 'warning');
+        return;
+      }
+      
+      // Disable button and show loading state
+      this.disabled = true;
+      this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Processing...';
+      
+      // Close the modal immediately to improve perceived performance
+      const modal = bootstrap.Modal.getInstance(document.getElementById('deleteAccountModal'));
+      if (modal) modal.hide();
+      
+      showGlobalAlert('Processing account deletion...', 'info');
+      
+      // Send delete request
+      fetch('{{ url_for("user.delete_account") }}', {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Content-Type': 'application/json'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showGlobalAlert('Your account has been deleted successfully. Redirecting...', 'success');
+          // Redirect to logout immediately without delay
+          window.location.href = '{{ url_for("auth.logout") }}';
+        } else {
+          // Show error and reset button
+          showGlobalAlert(data.error || 'An error occurred during account deletion.', 'danger');
+          this.disabled = false;
+          this.innerHTML = '<i class="fas fa-user-times me-2"></i> Delete Account';
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        showGlobalAlert('An error occurred during account deletion.', 'danger');
+        this.disabled = false;
+        this.innerHTML = '<i class="fas fa-user-times me-2"></i> Delete Account';
+      });
+    });
+  }
+});
+</script>
+
+<!-- Delete Account Modal -->
+<div class="modal fade" id="deleteAccountModal" tabindex="-1" aria-labelledby="deleteAccountModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="deleteAccountModalLabel">
+          <i class="fas fa-exclamation-triangle me-2"></i> Delete Account
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          <i class="fas fa-exclamation-circle me-2"></i>
+          <strong>Warning:</strong> This action will deactivate your account and remove your personal information.
+        </div>
+        
+        <p>Please understand the following:</p>
+        <ul>
+          <li>Your account will be marked as deleted but preserved in our database for legal and record-keeping purposes.</li>
+          <li>Your personal information (name, email) will be anonymized.</li>
+          <li>You will be logged out immediately.</li>
+          <li>You won't be able to log back in with this account.</li>
+        </ul>
+        
+        <p class="mb-1">To confirm, please type your email address:</p>
+        <input type="email" class="form-control" id="confirmDeleteEmail" placeholder="{{ user.email }}">
+        
+        <div class="form-check mt-3">
+          <input class="form-check-input" type="checkbox" id="confirmDeleteCheck">
+          <label class="form-check-label" for="confirmDeleteCheck">
+            I understand this action is irreversible and confirm I want to delete my account.
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn" disabled>
+          <i class="fas fa-user-times me-2"></i> Delete Account
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

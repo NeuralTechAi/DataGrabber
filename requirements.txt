@@ -1,0 +1,55 @@
+# Core Flask Framework
+Flask>=3.0.0,<4.0.0
+Flask-SQLAlchemy>=3.1.0,<4.0.0
+Flask-Migrate>=4.0.0,<5.0.0
+Flask-Bcrypt>=1.0.0,<2.0.0
+
+# Database
+SQLAlchemy>=2.0.0,<3.0.0
+
+# Environment and Configuration  
+python-dotenv>=1.0.0,<2.0.0
+
+# Security
+Werkzeug>=3.0.0,<4.0.0
+Flask-WTF>=1.2.0,<2.0.0
+
+# AI Services
+google-generativeai>=0.8.0,<1.0.0
+openai>=1.50.0,<2.0.0
+anthropic>=0.60.0,<1.0.0
+
+# Document Processing
+PyMuPDF>=1.24.0,<2.0.0
+openpyxl>=3.1.0,<4.0.0
+Pillow>=10.0.0,<11.0.0
+xlsxwriter>=3.2.5
+
+# Data Processing (REQUIRED - used in background_processor.py, document_service.py, projects/routes.py)
+pandas>=2.0.0,<3.0.0
+
+# System Monitoring (OPTIONAL - used in background_processor.py for memory monitoring)
+psutil>=5.9.0,<6.0.0
+
+# Web Server (for production)
+gunicorn>=21.0.0,<25.0.0
+
+# Additional Python Standard Library Dependencies
+# These are built-in but explicitly listing for clarity of usage:
+# - os, logging, threading, time, datetime, uuid, re, json, base64, secrets
+# - concurrent.futures, functools, typing, pathlib, subprocess, tempfile
+# - email.mime.text, email.mime.multipart, smtplib
+
+# Email system will be configured in future updates
+
+# Database Connectors (choose one based on your database)
+# For SQLite (default) - built-in with Python, no package needed
+# For PostgreSQL (uncomment if needed):
+psycopg2-binary>=2.9.0,<3.0.0
+# For MySQL (uncomment if needed):
+# PyMySQL>=1.1.0,<2.0.0
+
+# Development Dependencies (uncomment for development environment)
+# pytest>=8.0.0,<9.0.0          # For testing
+# black>=24.0.0,<25.0.0          # For code formatting
+# flake8>=7.0.0,<8.0.0           # For linting

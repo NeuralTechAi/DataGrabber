@@ -1,0 +1,181 @@
+{% extends "layout.html" %} {% block title %}Admin Dashboard{% endblock %} {%
+block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Admin Dashboard</h2>
+    <div>
+      <a
+        href="{{ url_for('auth.admin_logout') }}"
+        class="btn btn-outline-secondary me-2"
+      >
+        Logout
+      </a>
+
+      {% if g.admin is defined and g.admin.is_superadmin %}
+      <a href="{{ url_for('auth.admin_register') }}" class="btn btn-primary">
+        Register New Admin
+      </a>
+      <a href="{{ url_for('admin.list_admins') }}" class="btn btn-warning ms-2">
+        Manage Admins
+      </a>
+      <a href="{{ url_for('admin.ai_settings') }}" class="btn btn-info ms-2">
+        <i class="fas fa-robot me-1"></i> AI Settings
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <table class="table table-bordered mt-3">
+    <thead>
+      <tr>
+        <th>User ID</th>
+        <th>Email</th>
+        <th>Status</th>
+        <th>Role</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+        <td>{{ user.id }}</td>
+        <td>{{ user.email }}</td>
+        <td>
+          {% if user.is_suspended %}
+          <span class="badge bg-warning">Suspended</span>
+          {% else %}
+          <span class="badge bg-success">Active</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if admin_users and admin_users[user.id] %}
+          <span class="badge bg-primary">Admin User</span>
+          {% else %}
+          <span class="badge bg-secondary">Regular User</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if admin_users and admin_users[user.id] %}
+            {% if is_superadmin %}
+            <!-- Super Admin can remove Admin Users -->
+            <button
+              class="btn btn-danger btn-sm"
+              onclick="removeUser({{ user.id }}, true)"
+            >
+              Remove Admin
+            </button>
+            {% endif %}
+          {% else %}
+            <!-- Regular user can be removed by any admin -->
+            <button
+              class="btn btn-danger btn-sm"
+              onclick="removeUser({{ user.id }}, false)"
+            >
+              Remove
+            </button>
+          {% endif %}
+
+          {% if not user.is_suspended %}
+          <button
+            class="btn btn-warning btn-sm"
+            onclick="suspendUser({{ user.id }})"
+          >
+            Suspend
+          </button>
+          {% else %}
+          <button
+            class="btn btn-success btn-sm"
+            onclick="unsuspendUser({{ user.id }})"
+          >
+            Unsuspend
+          </button>
+          {% endif %}
+          <button
+            class="btn btn-info btn-sm"
+            onclick="viewUserDetails({{ user.id }})"
+          >
+            View Details
+          </button>
+          
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- User Details Modal -->
+<div class="modal fade" id="userDetailsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" id="userDetailsContent">
+      <!-- Content loaded via AJAX -->
+    </div>
+  </div>
+</div>
+
+<!-- Add Credits modal and functionality removed – credits system disabled -->
+{% endblock %} {% block scripts %}
+<script>
+  function removeUser(userId, isAdminUser) {
+    let confirmMessage = isAdminUser 
+      ? "Are you sure you want to remove this admin user? This action cannot be undone." 
+      : "Are you sure you want to remove this user?";
+      
+    if (confirm(confirmMessage)) {
+      fetch(`/admin/user/${userId}/remove`, { method: "POST" })
+        .then((res) => {
+          if (res.status === 403) {
+            // Handle permission error
+            return res.json().then(data => {
+              throw new Error(data.error || "Permission denied");
+            });
+          }
+          return res.json();
+        })
+        .then((data) => {
+          if (data.success) {
+            let message = isAdminUser 
+              ? "Admin user removed successfully!" 
+              : "User removed successfully!";
+            alert(message);
+            location.reload();
+          } else {
+            alert("Failed to remove user: " + (data.error || "Unknown error"));
+          }
+        })
+        .catch((error) => {
+          console.error("Error removing user:", error);
+          alert(error.message || "Network error occurred while removing user");
+        });
+    }
+  }
+  function suspendUser(userId) {
+    if (confirm("Suspend this user?")) {
+      fetch(`/admin/user/${userId}/suspend`, { method: "POST" })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) location.reload();
+        });
+    }
+  }
+  function unsuspendUser(userId) {
+    if (confirm("Unsuspend this user?")) {
+      fetch(`/admin/user/${userId}/unsuspend`, { method: "POST" })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) location.reload();
+        });
+    }
+  }
+  function viewUserDetails(userId) {
+    fetch(`/admin/user/${userId}/details`)
+      .then((res) => res.text())
+      .then((html) => {
+        document.getElementById("userDetailsContent").innerHTML = html;
+        new bootstrap.Modal(document.getElementById("userDetailsModal")).show();
+      });
+  }
+
+  // Credits/plan management has been removed – app is free to use
+</script>
+{% endblock %}

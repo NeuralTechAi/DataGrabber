@@ -1,0 +1,28 @@
+/* This file is referenced in layout.html but was missing */
+/* Currently empty - all styles are inline in templates */
+/* ...existing code... */
+
+/* Nav tab link color customization */
+.nav-tabs .nav-link {
+  color: #0d6efd !important; /* blue for non-active */
+}
+
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-item.show .nav-link {
+  color: #000 !important; /* black for active */
+  /* background-color: #fff !important;
+  border-color: #dee2e6 #dee2e6 #fff !important;*/
+}
+
+.history-container {
+  max-height: 300px; /* adjust to fit modal */
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+}
+
+/* Add this to your main CSS file or inside a <style> block */
+.modal-offset-top {
+  margin-top: 80px; /* adjust this value to match your navbar height */
+}

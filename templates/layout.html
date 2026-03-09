@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      {% block title %}DataGrabber - Unlock Your Data's Potential{% endblock %}
+    </title>
+    <!-- Sortable.js for drag-and-drop -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <!-- Font Awesome -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <!-- Google Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- DataTables CSS -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css"
+    />
+    <!-- Custom CSS -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+    <style>
+      :root {
+        /* Modern Color Palette - Unified across all pages */
+        --primary-blue: #3b82f6;
+        --primary-blue-dark: #1e40af;
+        --secondary-blue: #1d4ed8;
+        --primary-red: #ef4444;
+        --secondary-red: #dc2626;
+        --light-blue: #dbeafe;
+        --light-red: #fee2e2;
+        --accent-purple: #8b5cf6;
+        --accent-purple-dark: #6d28d9;
+        --accent-cyan: #06b6d4;
+        --success-green: #10b981;
+        --warning-orange: #f59e0b;
+        --danger-red: #ef4444;
+
+        /* Neutral Colors */
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-300: #d1d5db;
+        --gray-400: #9ca3af;
+        --gray-500: #6b7280;
+        --gray-600: #4b5563;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --gray-900: #111827;
+
+        /* Shadows */
+        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1),
+          0 2px 4px -2px rgb(0 0 0 / 0.1);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1),
+          0 4px 6px -4px rgb(0 0 0 / 0.1);
+        --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1),
+          0 8px 10px -6px rgb(0 0 0 / 0.1);
+        --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+        /* Border Radius */
+        --radius-sm: 0.375rem;
+        --radius: 0.5rem;
+        --radius-md: 0.75rem;
+        --radius-lg: 1rem;
+        --radius-xl: 1.5rem;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        color: var(--gray-800);
+        line-height: 1.6;
+        min-height: 100vh;
+      }
+
+      /* Improved Typography */
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 600;
+        line-height: 1.3;
+        color: var(--gray-900);
+      }
+
+      /* Modern Navbar */
+      .navbar {
+        background: linear-gradient(
+          135deg,
+          var(--primary-blue) 0%,
+          var(--accent-purple) 50%,
+          var(--primary-red) 100%
+        );
+        backdrop-filter: blur(20px);
+        border: none;
+        box-shadow: var(--shadow-lg);
+        padding: 1rem 0;
+      }
+
+      .navbar-brand {
+        color: white !important;
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 700;
+        font-size: 1.5rem;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        transition: all 0.3s ease;
+      }
+
+      .navbar-brand:hover {
+        transform: translateY(-2px);
+        color: rgba(255, 255, 255, 0.9) !important;
+      }
+
+      .navbar-brand i {
+        margin-right: 0.75rem;
+        font-size: 1.75rem;
+        background: linear-gradient(45deg, #ffffff, #f1f5f9);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .nav-link {
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-weight: 500;
+        padding: 0.75rem 1.25rem !important;
+        margin: 0 0.25rem;
+        border-radius: var(--radius-md);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .nav-link::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.1),
+          transparent
+        );
+        transition: left 0.5s;
+      }
+
+      .nav-link:hover {
+        color: white !important;
+        background-color: rgba(255, 255, 255, 0.15);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+      }
+
+      .nav-link:hover::before {
+        left: 100%;
+      }
+
+      .dropdown-menu {
+        z-index: 2000 !important;
+      }
+      .navbar,
+      .navbar * {
+        z-index: 1100 !important;
+      }
+
+      /* Enhanced Cards */
+      .card {
+        border: none;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        overflow: hidden;
+        position: relative;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(
+          90deg,
+          var(--primary-blue),
+          var(--accent-purple),
+          var(--primary-red)
+        );
+      }
+
+      .card:hover {
+        transform: translateY(-8px);
+        box-shadow: var(--shadow-xl);
+      }
+
+      .card-header {
+        background: linear-gradient(
+          135deg,
+          var(--gray-50) 0%,
+          rgba(255, 255, 255, 0.9) 100%
+        );
+        border-bottom: 1px solid var(--gray-200);
+        padding: 1.5rem;
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0 !important;
+      }
+
+      .card-body {
+        padding: 1.5rem;
+      }
+
+      .card-footer {
+        background: var(--gray-50);
+        border-top: 1px solid var(--gray-200);
+        padding: 1.25rem 1.5rem;
+      }
+
+      /* Modern Buttons */
+      .btn {
+        font-weight: 500;
+        border-radius: var(--radius-md);
+        padding: 0.75rem 1.5rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+        position: relative;
+        overflow: hidden;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+      }
+
+      .btn::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.2),
+          transparent
+        );
+        transition: left 0.5s;
+      }
+
+      .btn:hover::before {
+        left: 100%;
+      }
+
+      .btn-primary {
+        background: linear-gradient(
+          135deg,
+          var(--primary-blue),
+          var(--secondary-blue)
+        );
+        color: white;
+        box-shadow: var(--shadow);
+      }
+
+      .btn-primary:hover {
+        background: linear-gradient(
+          135deg,
+          var(--secondary-blue),
+          var(--primary-blue)
+        );
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+        color: white;
+      }
+
+      .btn-danger,
+      .btn-custom-red {
+        background: linear-gradient(
+          135deg,
+          var(--primary-red),
+          var(--secondary-red)
+        );
+        color: white;
+        box-shadow: var(--shadow);
+      }
+
+      .btn-danger:hover,
+      .btn-custom-red:hover {
+        background: linear-gradient(
+          135deg,
+          var(--secondary-red),
+          var(--primary-red)
+        );
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+        color: white;
+      }
+
+      .btn-outline-primary {
+        background: transparent;
+        border: 2px solid var(--primary-blue);
+        color: var(--primary-blue);
+      }
+
+      .btn-outline-primary:hover {
+        background: var(--primary-blue);
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+      }
+
+      .btn-outline-secondary {
+        background: transparent;
+        border: 2px solid var(--gray-300);
+        color: var(--gray-600);
+      }
+
+      .btn-outline-secondary:hover {
+        background: var(--gray-600);
+        color: white;
+        border-color: var(--gray-600);
+        transform: translateY(-2px);
+      }
+
+      .btn-lg {
+        padding: 1rem 2rem;
+        font-size: 1.125rem;
+      }
+
+      .btn-sm {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+      }
+
+      /* User Menu */
+      .user-menu-btn {
+        display: flex;
+        align-items: center;
+        background-color: rgba(255, 255, 255, 0.15);
+        border-radius: var(--radius);
+        padding: 0.5rem 1rem;
+        color: white;
+        text-decoration: none;
+        transition: all 0.3s ease;
+      }
+
+      .user-menu-btn:hover {
+        background-color: rgba(255, 255, 255, 0.25);
+        transform: translateY(-2px);
+      }
+      
+      .money-display {
+        background-color: white;
+        color: #333;
+        border-radius: var(--radius-sm);
+        padding: 0.25rem 0.75rem;
+        margin-left: 0.5rem;
+        font-weight: 600;
+        display: inline-block;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+
+      .user-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1rem;
+        margin-right: 0.75rem;
+      }
+
+      .user-name {
+        font-weight: 500;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .user-credits {
+        margin-left: 1rem;
+        background: rgba(16, 185, 129, 0.2);
+        padding: 0.25rem 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+
+      /* Enhanced Alerts */
+      .alert {
+        border: none;
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        box-shadow: var(--shadow);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .alert::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+      }
+
+      .alert-info::before {
+        background: var(--primary-blue);
+      }
+
+      .alert-danger::before {
+        background: var(--primary-red);
+      }
+
+      .alert-warning::before {
+        background: #f59e0b;
+      }
+
+      .alert-success::before {
+        background: #10b981;
+      }
+
+      /* Enhanced Notifications */
+      #notification-area .toast {
+        border: none;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-xl);
+        backdrop-filter: blur(20px);
+        overflow: hidden;
+        margin-bottom: 1rem;
+      }
+
+      /* Loading Animations */
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(30px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes slideInRight {
+        from {
+          opacity: 0;
+          transform: translateX(100%);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
+      }
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Page Animation */
+      .page-content {
+        animation: fadeInUp 0.6s ease-out;
+      }
+
+      /* Footer */
+      .footer {
+        background: linear-gradient(
+          135deg,
+          var(--gray-900) 0%,
+          var(--gray-800) 100%
+        );
+        color: var(--gray-300);
+        margin-top: 4rem;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .footer::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          var(--primary-blue),
+          var(--accent-purple),
+          var(--primary-red)
+        );
+      }
+    </style>
+    {% block styles %}{% endblock %}
+  </head>
+  <body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
+      <div class="container">
+        <a class="navbar-brand" href="{{ url_for('main.index') }}">
+          <i class="fas fa-magic"></i>
+          DataGrabber
+        </a>
+        <button
+          class="navbar-toggler border-0"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+          style="background: rgba(255, 255, 255, 0.1)"
+        >
+          <i class="fas fa-bars text-white"></i>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            {% if g.user %}
+            <!-- Logged in menu -->
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.dashboard') }}">
+                <i class="fas fa-tachometer-alt me-1"></i> Dashboard
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('projects.index') }}">
+                <i class="fas fa-folder me-1"></i> Projects
+              </a>
+            </li>
+            <li class="nav-item dropdown">
+              <a
+                class="user-menu-btn dropdown-toggle"
+                href="#"
+                id="navbarDropdown"
+                role="button"
+                data-bs-toggle="dropdown"
+                aria-expanded="false"
+              >
+                <div class="user-avatar">{{ g.user.username[0] | upper }}</div>
+                <div class="user-name">{{ g.user.username }}</div>
+              </a>
+              <ul
+                class="dropdown-menu dropdown-menu-end"
+                aria-labelledby="navbarDropdown"
+              >
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('user.profile') }}">
+                    <i class="fas fa-user me-2"></i> Profile
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('user.ai_settings') }}">
+                    <i class="fas fa-robot me-2"></i> AI Settings
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('auth.logout') }}">
+                    <i class="fas fa-sign-out-alt me-2"></i> Logout
+                  </a>
+                </li>
+              </ul>
+            </li>
+            {% else %}
+            <!-- Not logged in menu -->
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.index') }}">
+                <i class="fas fa-home me-1"></i> Home
+              </a>
+            </li>
+            
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('auth.login') }}">
+                <i class="fas fa-sign-in-alt me-1"></i> Login
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('auth.register') }}">
+                <i class="fas fa-user-plus me-1"></i> Register
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.documentation') }}">
+                <i class="fas fa-book me-1"></i> Documentation
+              </a>
+            </li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container py-5">
+      <div class="page-content">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %} {% if
+        messages %} {% for category, message in messages %}
+        <div
+          class="alert alert-{{ category }} alert-dismissible fade show"
+          role="alert"
+        >
+          <div class="d-flex align-items-center">
+            <i
+              class="fas fa-{% if category == 'success' %}check-circle{% elif category == 'danger' %}exclamation-triangle{% elif category == 'warning' %}info-circle{% else %}info{% endif %} me-3 fs-5"
+            ></i>
+            <div>{{ message }}</div>
+          </div>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="alert"
+            aria-label="Close"
+          ></button>
+        </div>
+        {% endfor %} {% endif %} {% endwith %}
+
+        <!-- Notification Area -->
+        <div
+          id="notification-area"
+          class="position-fixed top-0 end-0 p-3"
+          style="z-index: 1050"
+        ></div>
+
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer py-5">
+      <div class="container text-center">
+        <div class="row justify-content-center">
+          <div class="col-lg-6">
+            <h5 class="text-white mb-3">
+              <i class="fas fa-magic me-2"></i>
+              DataGrabber
+            </h5>
+            <p class="mb-2 text-gray-300">
+              Transform your documents into structured data with AI-powered
+              extraction
+            </p>
+            <small class="text-gray-400">
+              <i class="fas fa-shield-alt me-1"></i>
+              All data is stored locally on your computer
+            </small>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <!-- SortableJS -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+    <!-- Common JavaScript -->
+    <script>
+      function showNotification(message, type = "success") {
+        const icons = {
+          success: "check-circle",
+          danger: "exclamation-triangle",
+          warning: "exclamation-circle",
+          info: "info-circle",
+        };
+
+        const alertHTML = `
+                <div class="toast align-items-center text-white bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body d-flex align-items-center">
+                            <i class="fas fa-${
+                              icons[type] || "info-circle"
+                            } me-2"></i>
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+
+        const notificationArea = document.getElementById("notification-area");
+        notificationArea.insertAdjacentHTML("beforeend", alertHTML);
+
+        const toast = notificationArea.lastElementChild;
+        const bsToast = new bootstrap.Toast(toast, {
+          autohide: true,
+          delay: 5000,
+        });
+        bsToast.show();
+
+        toast.addEventListener("hidden.bs.toast", function () {
+          this.remove();
+        });
+
+        // Add entrance animation
+        toast.style.animation =
+          "slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
+      }
+
+      // Enhanced interactions
+      document.addEventListener("DOMContentLoaded", function () {
+        // Add hover effects to interactive elements
+        document.querySelectorAll(".card, .btn").forEach((element) => {
+          element.addEventListener("mouseenter", function () {
+            if (this.classList.contains("card")) {
+              this.style.transform = "translateY(-8px)";
+            }
+          });
+
+          element.addEventListener("mouseleave", function () {
+            if (this.classList.contains("card")) {
+              this.style.transform = "translateY(0)";
+            }
+          });
+        });
+
+        // Add loading states to buttons
+        // document
+        //   .querySelectorAll('.btn[type="submit"]:not([data-custom-handler])')
+        //   .forEach((button) => {
+        //     button.addEventListener("click", function (e) {
+        //       if (!this.form || this.form.checkValidity()) {
+        //         const originalContent = this.innerHTML;
+        //         this.innerHTML =
+        //           '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+        //         this.disabled = true;
+        //         this.dataset.originalContent = originalContent;
+        //       }
+        //     });
+        //   });
+
+        // Handle form submission errors
+        document.querySelectorAll("form").forEach((form) => {
+          form.addEventListener("submit", function () {
+            // This is handled by the button click event above
+            // cud this be the duplicate event listener?
+            console.log("Form submitted:", this);
+          });
+
+          // Invalid form submission
+          form.addEventListener(
+            "invalid",
+            function () {
+              const submitBtn = form.querySelector('button[type="submit"]');
+              if (submitBtn && submitBtn.dataset.originalContent) {
+                submitBtn.innerHTML = submitBtn.dataset.originalContent;
+                submitBtn.disabled = false;
+              }
+            },
+            true
+          );
+        });
+      });
+    </script>
+
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

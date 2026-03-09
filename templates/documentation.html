@@ -1,0 +1,696 @@
+{% extends "layout.html" %}
+{% block title %}DataGrabber - Documentation{% endblock %}
+
+{% block styles %}
+<style>
+  .documentation-header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 25%, #5b21b6 75%, #7c3aed 100%);
+    color: white;
+    padding: 3rem 0;
+    margin-bottom: 2rem;
+  }
+
+  .doc-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+  }
+
+  .doc-subtitle {
+    font-size: 1.25rem;
+    font-weight: 400;
+    opacity: 0.9;
+  }
+
+  .documentation-content {
+    padding: 2rem 0 4rem;
+  }
+
+  .doc-section {
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+  }
+
+  .doc-section:last-child {
+    border-bottom: none;
+  }
+
+  .doc-section-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    color: #2d3748;
+    position: relative;
+    display: inline-block;
+  }
+
+  .doc-section-title::after {
+    content: "";
+    position: absolute;
+    bottom: -10px;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  }
+
+  .step-container {
+    margin: 1.5rem 0;
+    padding: 1.5rem;
+    border-radius: 8px;
+    background: #f8fafc;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+  }
+
+  .step-container:hover {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    transform: translateY(-3px);
+  }
+
+  .step-title {
+    display: flex;
+    align-items: center;
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: #1e40af;
+  }
+
+  .step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 50%;
+    margin-right: 0.75rem;
+    font-weight: 700;
+  }
+
+  .step-description {
+    color: #4b5563;
+    line-height: 1.6;
+  }
+
+  .tips-container {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    border-radius: 8px;
+    background: #eef2ff;
+    border-left: 4px solid #6366f1;
+  }
+
+  .tips-title {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #4338ca;
+  }
+
+  .tips-list {
+    margin-left: 1.5rem;
+  }
+
+  .tips-list li {
+    margin-bottom: 0.5rem;
+  }
+
+  .image-container {
+    margin: 1.5rem 0;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  }
+
+  .image-container img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .image-caption {
+    padding: 0.75rem;
+    background: #f1f5f9;
+    font-size: 0.9rem;
+    color: #64748b;
+    text-align: center;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+  }
+
+  .file-type-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .pdf-icon { color: #e53e3e; }
+  .image-icon { color: #38a169; }
+  .txt-icon { color: #3182ce; }
+
+  .back-to-top {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #4f46e5;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    z-index: 100;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  }
+
+  .back-to-top.visible {
+    opacity: 1;
+  }
+
+  .back-to-top:hover {
+    transform: translateY(-5px);
+    background: #4338ca;
+  }
+
+  .doc-nav {
+    position: sticky;
+    top: 20px;
+    padding: 1.5rem;
+    border-radius: 8px;
+    background: #f8fafc;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  }
+
+  .doc-nav-title {
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+  }
+
+  .doc-nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .doc-nav-item {
+    margin-bottom: 0.5rem;
+  }
+
+  .doc-nav-link {
+    display: block;
+    padding: 0.5rem 0;
+    color: #4b5563;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .doc-nav-link:hover {
+    color: #4f46e5;
+    text-decoration: none;
+    padding-left: 0.5rem;
+  }
+  
+  .doc-nav-subitem {
+    padding-left: 1rem;
+    font-size: 0.9rem;
+  }
+
+  @media (max-width: 992px) {
+    .doc-nav {
+      position: relative;
+      margin-bottom: 2rem;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Documentation Header -->
+<header class="documentation-header">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-10 text-center">
+        <h1 class="doc-title">DataGrabber Documentation</h1>
+        <p class="doc-subtitle">A comprehensive guide to extracting data from PDFs, Images, and TXT files</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container documentation-content">
+  <div class="row">
+    <!-- Sidebar Navigation -->
+    <div class="col-lg-3 mb-4">
+      <nav class="doc-nav">
+        <h5 class="doc-nav-title">Table of Contents</h5>
+        <ul class="doc-nav-list">
+          <li class="doc-nav-item">
+            <a href="#getting-started" class="doc-nav-link">Getting Started</a>
+          </li>
+          <li class="doc-nav-item">
+            <a href="#creating-project" class="doc-nav-link">Creating a Project</a>
+          </li>
+          <li class="doc-nav-item">
+            <a href="#uploading-documents" class="doc-nav-link">Uploading Documents</a>
+            <ul>
+              <li class="doc-nav-item doc-nav-subitem">
+                <a href="#upload-methods" class="doc-nav-link">Upload Methods</a>
+              </li>
+              <li class="doc-nav-item doc-nav-subitem">
+                <a href="#mixed-file-types" class="doc-nav-link">Mixed File Types</a>
+              </li>
+            </ul>
+          </li>
+          <li class="doc-nav-item">
+            <a href="#auto-save" class="doc-nav-link">Automatic Saving</a>
+          </li>
+          <li class="doc-nav-item">
+            <a href="#exporting-data" class="doc-nav-link">Exporting Data</a>
+          </li>
+          <li class="doc-nav-item">
+            <a href="#troubleshooting" class="doc-nav-link">Troubleshooting</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="col-lg-9">
+      <!-- Getting Started Section -->
+      <section id="getting-started" class="doc-section">
+        <h2 class="doc-section-title">Getting Started</h2>
+        <p>DataGrabber allows you to extract structured data from various file types including PDFs, images (JPG, PNG), and text files. This guide will walk you through the process of setting up projects and extracting data from each file type.</p>
+        
+        <div class="row mb-4 text-center">
+          <div class="col-md-4">
+            <div class="file-type-icon pdf-icon">
+              <i class="fas fa-file-pdf"></i>
+            </div>
+            <h5>PDF Documents</h5>
+            <p class="small">Extract data from multi-page PDFs with text or scanned content</p>
+          </div>
+          <div class="col-md-4">
+            <div class="file-type-icon image-icon">
+              <i class="fas fa-file-image"></i>
+            </div>
+            <h5>Image Files</h5>
+            <p class="small">Process JPG, PNG, and other image formats with OCR technology</p>
+          </div>
+          <div class="col-md-4">
+            <div class="file-type-icon txt-icon">
+              <i class="fas fa-file-alt"></i>
+            </div>
+            <h5>Text Files</h5>
+            <p class="small">Extract structured data from plain text documents</p>
+          </div>
+        </div>
+
+        <p>Before starting, ensure you have:</p>
+        <ul>
+          <li>Created an account and logged in</li>
+          <li>Prepared your documents for processing</li>
+        </ul>
+      </section>
+
+      <!-- Creating a Project Section -->
+      <section id="creating-project" class="doc-section">
+        <h2 class="doc-section-title">Creating a Project</h2>
+        <p>Projects in DataGrabber help you organize and process related documents. Each project can have its own set of fields to extract and can reused multiple times.</p>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">1</span>Navigate to Dashboard</h3>
+          <p class="step-description">After logging in, click projects or you'll be directed to your dashboard. Click on the "Create New Project" button.</p>
+          
+          <div class="image-container">
+            <img src="{{ url_for('static', filename='Dashboard.png') }}" alt="Dashboard with Create New Project button">
+            <div class="image-caption">The dashboard with the Create New Project button highlighted</div>
+          </div>
+        </div>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">2</span>Enter Project Details</h3>
+          <p class="step-description">Enter a descriptive name for your project that helps you identify its purpose or content and select a folder to store the project files, note that the data that will be extracted using this project template will be automatically stored in this folder as an excel file.</p>
+          
+          <div class="image-container">
+            <img src="{{ url_for('static', filename='EnterProjectDetails.png') }}" alt="Enter Project Details Form">
+            <div class="image-caption">The project details form showing project name, description, and storage location fields</div>
+          </div>
+        </div>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">3</span>Define Data Fields</h3>
+          <p class="step-description">Add the fields you want to extract from your documents. For each field:</p>
+          <ul>
+            <li>Enter a field name (e.g., "Invoice Number", "Date", "Total Amount")</li>
+            <li>Provide a detailed description to help the AI understand what to look for</li>
+            <li>You can move fields up and down using the arrow on the right or drag fields up and down using on the left</li>
+            <li>Click "Add Field" to add more fields as needed</li>
+          </ul>
+          
+          <div class="image-container">
+            <img src="{{ url_for('static', filename='CreateNewProject1.png') }}" alt="Define Data Fields Form">
+            <div class="image-caption">Adding custom fields for data extraction with project setup</div>
+          </div>
+        </div>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">4</span>Save Your Project</h3>
+          <p class="step-description">Click "Create Project" to finalize your project setup. You'll be redirected to the project dashboard.</p>
+        </div>
+
+        <div class="tips-container">
+          <h4 class="tips-title"><i class="fas fa-lightbulb"></i> Tips for Defining Fields</h4>
+          <ul class="tips-list">
+            <li>Be specific in your field descriptions to improve extraction accuracy</li>
+            <li>Include format examples in descriptions (e.g., "Date in MM/DD/YYYY format")</li>
+            <li>For amounts, specify currency and format (e.g., "Total amount in USD with 2 decimal places")</li>
+            <li>For multi-page documents, you can specify where the field appears on a particular page (optional)</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Uploading Documents Section -->
+      <section id="uploading-documents" class="doc-section">
+        <h2 class="doc-section-title">Uploading Documents</h2>
+        <p>DataGrabber supports a variety of file formats including PDFs, images (JPG, PNG, WEBP, BMP), and text files. The system can process multiple file types in a single batch.</p>
+
+        <div id="upload-methods" class="step-container">
+          <h3 class="step-title"><span class="step-number">1</span>Navigate to Your Project</h3>
+          <p class="step-description">From the dashboard, click on your project name to access the project page.</p>
+        </div>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">2</span>Choose Your Upload Method</h3>
+          <p class="step-description">DataGrabber offers three convenient ways to upload your documents:</p>
+          
+          <ul class="mt-3">
+            <li class="mb-3">
+              <strong>Click and Select Files:</strong> Click the "Upload Documents" button and use the file browser to select one or more files.
+            </li>
+            <li class="mb-3">
+              <strong>Drag and Drop:</strong> Simply drag files from your computer and drop them into the designated upload area.
+            </li>
+            <li class="mb-3">
+              <strong>Add Folder:</strong> For larger document sets, click the "Add Folder" button to upload an entire folder of documents at once. <span class="badge bg-info">Recommended for large batches</span>
+            </li>
+          </ul>
+          
+          <div class="image-container">
+            <img src="{{ url_for('static', filename='Fileselectionmethods.png') }}" alt="Document Upload Methods">
+            <div class="image-caption">The document upload interface showing folder linking and file selection methods</div>
+          </div>
+          
+          <div class="alert alert-info mt-3">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Pro Tip:</strong> For large document sets or batch processing, we recommend using the "Add Folder" method for more efficient uploading and processing.
+          </div>
+        </div>
+
+        <div id="mixed-file-types" class="step-container">
+          <h3 class="step-title"><span class="step-number">3</span>Mixed File Type Processing</h3>
+          <p class="step-description">DataGrabber seamlessly handles multiple file formats in a single upload session:</p>
+          
+          <ul class="mt-3">
+            <li>Upload PDFs, images, and text files together in one batch</li>
+            <li>The system automatically detects file types and applies the appropriate processing method</li>
+            <li>Each file is processed with the optimal extraction algorithm for its format</li>
+            <li>Results from different file types are standardized into a consistent data format</li>
+          </ul>
+          
+          <div class="image-container">
+            <img src="{{ url_for('static', filename='Fileselectionmethods.png') }}" alt="Mixed File Types Processing">
+            <div class="image-caption">Upload interface supporting multiple file formats (PDF, JPG, PNG, WebP, BMP, GIF, TXT)</div>
+          </div>
+        </div>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">4</span>Processing</h3>
+          <p class="step-description">After uploading, DataGrabber automatically begins processing your documents:</p>
+          
+          <ul class="mt-3">
+            <li>Progress indicators show real-time processing status</li>
+            <li>Each document is analyzed using advanced AI to extract your defined fields</li>
+            <li>Processing time varies based on file type, size, and complexity</li>
+          </ul>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">5</span>Review Extracted Data</h3>
+          <p class="step-description">Once processing is complete, you'll see your extracted data in a structured table format, and the data is automatically stored in the folder you created for the project. Review the data for accuracy, you can edit extracted data.</p>
+
+        <div class="tips-container">
+          <h4 class="tips-title"><i class="fas fa-lightbulb"></i> Tips for Document Processing</h4>
+          <ul class="tips-list">
+            <li>Higher quality documents (clear text, good resolution) yield more accurate results</li>
+            <li>For large batches, organize similar documents in folders for easier uploading</li>
+            <li>Newly extracted data are auto stored in the same excel file on the project folder</li>
+            <li>Documents are processed using your configured AI provider (see AI Settings)</li>
+            <li>For very large document sets, consider processing in manageable batches</li>
+            <li>Supported formats: PDF, JPG, JPEG, PNG, WEBP, BMP, TXT</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Automatic Saving Section -->
+      <section id="auto-save" class="doc-section">
+        <h2 class="doc-section-title">Automatic Saving</h2>
+        <p>DataGrabber features robust automatic saving capabilities to ensure your work is never lost.</p>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">1</span>Project Autosave</h3>
+          <p class="step-description">All your project configurations are automatically saved as you work:</p>
+          
+          <ul class="mt-3">
+            <li>Projects are saved instantly when created</li>
+            <li>Any changes to project settings are saved in real-time</li>
+            <li>Field definitions and extraction templates are preserved automatically</li>
+            <li>Saved projects can be reused for future document processing without reconfiguration</li>
+          </ul>
+          
+          <div class="alert alert-success mt-3">
+            <i class="fas fa-check-circle me-2"></i>
+            <strong>Time-Saving Feature:</strong> Create a project once, then reuse it for all similar documents in the future. Your configuration will be ready to use, making batch processing effortless.
+          </div>
+        </div>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">2</span>Extracted Data Autosave</h3>
+          <p class="step-description">All extracted data is automatically saved to your computer:</p>
+          
+          <ul class="mt-3">
+            <li>Data is saved locally as soon as extraction is complete</li>
+            <li>All changes and edits to data are saved in real-time</li>
+            <li>Data remains accessible even after closing your browser</li>
+            <li>Your data never leaves your computer, ensuring maximum privacy and security</li>
+          </ul>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">3</span>Continuous Updates</h3>
+          <p class="step-description">DataGrabber continuously updates your saved data:</p>
+          
+          <ul class="mt-3">
+            <li>Any manual edits to extracted data are saved instantly</li>
+            <li>New documents added to a project are incorporated into the saved dataset</li>
+            <li>Export operations preserve the most up-to-date version of your data</li>
+            <li>No manual save actions required at any point in the workflow</li>
+          </ul>
+        </div>
+
+        <div class="tips-container">
+          <h4 class="tips-title"><i class="fas fa-lightbulb"></i> Benefits of Automatic Saving</h4>
+          <ul class="tips-list">
+            <li>Never lose work due to browser crashes or accidental closures</li>
+            <li>Seamlessly continue work across multiple sessions</li>
+            <li>Build a library of project templates for different document types</li>
+            <li>No need to reconfigure extraction settings for repetitive tasks</li>
+            <li>All data remains private and secure on your local machine</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Exporting Data Section -->
+      <section id="exporting-data" class="doc-section">
+        <h2 class="doc-section-title">Exporting Extracted Data</h2>
+        <p>Apart from the data auto save, you can also export the extracted data for use in other systems.</p>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">1</span>Access Your Project Results</h3>
+          <p class="step-description">Navigate to your project and view the processed documents and their extracted data.</p>
+        </div>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">2</span>Export Data</h3>
+          <p class="step-description">Click on the "Export" or "Download" button to save your data.</p>
+          
+          <div class="image-container">
+            <img src="{{ url_for('static', filename='ExportData.png') }}" alt="Export Data Options">
+            <div class="image-caption">Data export options showing CSV and Excel format choices</div>
+          </div>
+        </div>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">3</span>Select Export Format</h3>
+          <p class="step-description">Choose your preferred format from the available options:</p>
+          <ul>
+            <li><strong>Excel (.xlsx)</strong> - For spreadsheet analysis and manipulation</li>
+            <li><strong>CSV</strong> - For maximum compatibility with other systems</li>
+          </ul>
+        </div>
+
+        <div class="step-container">
+          <h3 class="step-title"><span class="step-number">4</span>Save File</h3>
+          <p class="step-description">Download the file to your computer.</p>
+        </div>
+
+        <div class="tips-container">
+          <h4 class="tips-title"><i class="fas fa-lightbulb"></i> Tips for Data Export</h4>
+          <ul class="tips-list">
+            <li>Export regularly to ensure you have backups of your extracted data</li>
+            <li>Excel format preserves formatting and is easier to work with for complex data</li>
+            <li>CSV format is better for importing into databases or other systems</li>
+            <li>Check your exported data for any formatting issues before using it in critical systems</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Troubleshooting Section -->
+      <section id="troubleshooting" class="doc-section">
+        <h2 class="doc-section-title">Troubleshooting Common Issues</h2>
+        <p>Here are solutions to common problems you might encounter while using DataGrabber.</p>
+
+        <div class="accordion" id="troubleshootingAccordion">
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingOne">
+              <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                Poor Extraction Quality
+              </button>
+            </h2>
+            <div id="collapseOne" class="accordion-collapse collapse show" aria-labelledby="headingOne" data-bs-parent="#troubleshootingAccordion">
+              <div class="accordion-body">
+                <p><strong>Issue:</strong> Data is not being extracted accurately or fields are missing.</p>
+                <p><strong>Solutions:</strong></p>
+                <ul>
+                  <li>Improve your field descriptions to be more specific</li>
+                  <li>For PDFs and images, ensure they are high-quality and clear</li>
+                  <li>For scanned documents, ensure they are properly aligned</li>
+                  <li>Check if text in the document is actually text and not an image</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingTwo">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+                Upload Errors
+              </button>
+            </h2>
+            <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#troubleshootingAccordion">
+              <div class="accordion-body">
+                <p><strong>Issue:</strong> Unable to upload documents or errors during upload.</p>
+                <p><strong>Solutions:</strong></p>
+                <ul>
+                  <li>Check file size (maximum allowed is 20MB per file)</li>
+                  <li>Verify file format is supported</li>
+                  <li>Ensure you have a stable internet connection</li>
+                  <li>Try uploading files one at a time instead of in batch</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingThree">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
+                Processing Errors
+              </button>
+            </h2>
+            <div id="collapseThree" class="accordion-collapse collapse" aria-labelledby="headingThree" data-bs-parent="#troubleshootingAccordion">
+              <div class="accordion-body">
+                <p><strong>Issue:</strong> Document uploads but fails during processing.</p>
+                <p><strong>Solutions:</strong></p>
+                <ul>
+                  <li>Verify the document isn't corrupted or password-protected</li>
+                  <li>For large documents, try processing pages in smaller batches</li>
+                  <li>Ensure document content is visible and not heavily redacted</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingFour">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">
+                Export Issues
+              </button>
+            </h2>
+            <div id="collapseFour" class="accordion-collapse collapse" aria-labelledby="headingFour" data-bs-parent="#troubleshootingAccordion">
+              <div class="accordion-body">
+                <p><strong>Issue:</strong> Problems exporting or downloading results.</p>
+                <p><strong>Solutions:</strong></p>
+                <ul>
+                  <li>Check if your browser is blocking downloads</li>
+                  <li>Try a different export format (Excel vs CSV)</li>
+                  <li>For large projects, try exporting in smaller batches</li>
+                  <li>Clear browser cache and try again</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- Back to Top Button -->
+<div class="back-to-top">
+  <i class="fas fa-arrow-up"></i>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Back to Top Button Functionality
+    const backToTopButton = document.querySelector('.back-to-top');
+    
+    window.addEventListener('scroll', function() {
+      if (window.pageYOffset > 300) {
+        backToTopButton.classList.add('visible');
+      } else {
+        backToTopButton.classList.remove('visible');
+      }
+    });
+    
+    backToTopButton.addEventListener('click', function() {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    });
+    
+    // Smooth Scrolling for Navigation Links
+    document.querySelectorAll('.doc-nav-link').forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const targetId = this.getAttribute('href');
+        const targetElement = document.querySelector(targetId);
+        
+        window.scrollTo({
+          top: targetElement.offsetTop - 20,
+          behavior: 'smooth'
+        });
+      });
+    });
+  });
+</script>
+{% endblock %}

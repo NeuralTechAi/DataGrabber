@@ -1,0 +1,199 @@
+{% extends "layout.html" %}
+
+{% block title %}Contact Us - DataGrabber{% endblock %}
+
+{% block styles %}
+<style>
+  .contact-form-container {
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: white;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+
+  .contact-header {
+    background: linear-gradient(135deg, var(--primary-blue) 0%, var(--accent-purple) 100%);
+    padding: 2.5rem;
+    color: white;
+    position: relative;
+  }
+
+  .contact-header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('data:image/svg+xml,<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect width="2" height="2" fill="rgba(255,255,255,0.1)"/></svg>');
+    background-repeat: repeat;
+    opacity: 0.2;
+  }
+
+  .contact-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    position: relative;
+  }
+
+  .form-section {
+    padding: 2.5rem;
+  }
+
+  .form-label {
+    font-weight: 600;
+    color: var(--gray-800);
+    margin-bottom: 0.5rem;
+  }
+
+  .form-control {
+    border-radius: var(--radius-md);
+    border: 1px solid var(--gray-300);
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+  }
+
+  .form-control:focus {
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+  }
+
+  .form-select {
+    border-radius: var(--radius-md);
+    border: 1px solid var(--gray-300);
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+  }
+
+  .form-select:focus {
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+  }
+
+  .demo-section {
+    background-color: var(--gray-50);
+    border-top: 1px solid var(--gray-200);
+    padding: 2rem;
+    margin-top: 2rem;
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="contact-form-container">
+        <div class="contact-header">
+          <h1 class="contact-title">Contact Us</h1>
+          <p class="lead mb-4">We'd love to hear from you. Fill out the form below to get in touch with our team. Interested in seeing DataGrabber in action? Schedule a personalized demo with our team to see how our solution can transform your document processing workflow.</p>
+        </div>
+        
+        <div class="form-section">
+          <h4 class="mb-4">Contact Form</h4>
+          <form id="contactForm">
+            <div class="row g-4">
+              <div class="col-md-6">
+                <label for="name" class="form-label">Your Name</label>
+                <input type="text" class="form-control" id="name" name="name" placeholder="John Doe" required>
+              </div>
+              <div class="col-md-6">
+                <label for="email" class="form-label">Email Address</label>
+                <input type="email" class="form-control" id="email" name="email" placeholder="you@example.com" required>
+              </div>
+              <div class="col-12">
+                <label for="subject" class="form-label">Subject</label>
+                <input type="text" class="form-control" id="subject" name="subject" placeholder="Inquiry about DataGrabber" required>
+              </div>
+              <div class="col-12">
+                <label for="message" class="form-label">Message</label>
+                <textarea class="form-control" id="message" name="message" rows="5" placeholder="Type your message here..." required></textarea>
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-primary">
+                  <i class="fas fa-paper-plane me-2"></i>Send Message
+                </button>
+              </div>
+            </div>
+          </form>
+          
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Handle Contact Form submission
+    const contactForm = document.getElementById('contactForm');
+    
+    // Function to show notifications
+    function showNotification(message, type) {
+      // Create notification element
+      const notification = document.createElement('div');
+      notification.className = `alert alert-${type} alert-dismissible fade show mt-3`;
+      notification.role = 'alert';
+      notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      `;
+      
+      // Insert notification before the form
+      contactForm.parentNode.insertBefore(notification, contactForm);
+      
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 500);
+      }, 5000);
+    }
+    
+    if (contactForm) {
+      contactForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        // Get form data
+        const formData = new FormData(contactForm);
+
+        // Disable submit button to prevent double submission
+        const submitBtn = contactForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
+
+        try {
+          // Submit to backend
+          const response = await fetch('/contact/submit', {
+            method: 'POST',
+            body: formData
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            showNotification(result.message, 'success');
+            contactForm.reset();
+          } else {
+            showNotification(result.message, 'danger');
+          }
+        } catch (error) {
+          showNotification('There was an error sending your message. Please try again.', 'danger');
+        } finally {
+          // Re-enable submit button
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
+      });
+    }
+  });
+</script>
+{% endblock %}

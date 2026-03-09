@@ -1,0 +1,123 @@
+{% extends "layout.html" %}
+{% block title %}AI Settings - DataGrabber{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4">
+    <i class="fas fa-robot me-2 text-primary"></i> AI Provider & Model Settings
+  </h2>
+  <p class="text-muted mb-4">
+    Choose your default AI provider and model for document extraction. Add API keys for the providers you use. Your keys are stored securely and only used for your account.
+  </p>
+
+  <form method="post" action="{{ url_for('user.ai_settings') }}">
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-light">
+        <h5 class="mb-0">Default provider & model</h5>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">Provider</label>
+          <select name="provider" id="providerSelect" class="form-select" required>
+            <option value="openai" {{ 'selected' if settings and settings.ai_provider == 'openai' else '' }}>OpenAI (default)</option>
+            <option value="gemini" {{ 'selected' if settings and settings.ai_provider == 'gemini' else '' }}>Gemini (fallback)</option>
+            <option value="ollama" {{ 'selected' if settings and settings.ai_provider == 'ollama' else '' }}>Ollama</option>
+            <option value="openrouter" {{ 'selected' if settings and settings.ai_provider == 'openrouter' else '' }}>OpenRouter</option>
+          </select>
+        </div>
+        <div class="mb-3" id="modelSelectGroup">
+          <label class="form-label">Model</label>
+          <select name="model" id="modelSelect" class="form-select">
+            <!-- Populated by JS for openai/gemini/openrouter -->
+          </select>
+          <input type="text" name="ollama_model" id="ollamaModelInput" class="form-control d-none" placeholder="e.g. llama3.2" value="{{ settings.ollama_model if settings and settings.ollama_model else 'llama3.2' }}">
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-light">
+        <h5 class="mb-0">API keys & endpoints</h5>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">OpenAI API key</label>
+          <input type="password" name="openai_api_key" class="form-control" autocomplete="off"
+                 placeholder="{{ '•••••••• (leave blank to keep current)' if settings and settings.openai_api_key else 'sk-...' }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Gemini API key</label>
+          <input type="password" name="gemini_api_key" class="form-control" autocomplete="off"
+                 placeholder="{{ '•••••••• (leave blank to keep current)' if settings and settings.gemini_api_key else 'AIza...' }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">OpenRouter API key</label>
+          <input type="password" name="openrouter_api_key" class="form-control" autocomplete="off"
+                 placeholder="{{ '•••••••• (leave blank to keep current)' if settings and settings.openrouter_api_key else 'sk-or-...' }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Ollama base URL</label>
+          <input type="url" name="ollama_base_url" class="form-control" placeholder="http://localhost:11434/v1"
+                 value="{{ settings.ollama_base_url if settings and settings.ollama_base_url else 'http://localhost:11434/v1' }}">
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">
+      <i class="fas fa-save me-2"></i> Save settings
+    </button>
+    <a href="{{ url_for('user.profile') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+  </form>
+</div>
+
+<script>
+(function() {
+  const providersModels = {{ providers_models|tojson }};
+  const defaultOpenai = {{ default_openai|tojson }};
+  const defaultGemini = {{ default_gemini|tojson }};
+  const currentProvider = {{ (settings.ai_provider if settings else 'openai')|tojson }};
+  const currentModel = {{ (settings.ai_model if settings else '')|tojson }};
+
+  const providerSelect = document.getElementById('providerSelect');
+  const modelSelect = document.getElementById('modelSelect');
+  const ollamaModelInput = document.getElementById('ollamaModelInput');
+
+  function showModelSelect(showSelect) {
+    modelSelect.classList.toggle('d-none', !showSelect);
+    modelSelect.toggleAttribute('required', showSelect);
+    ollamaModelInput.classList.toggle('d-none', showSelect);
+    ollamaModelInput.removeAttribute('name');
+    if (showSelect) {
+      modelSelect.setAttribute('name', 'model');
+    } else {
+      ollamaModelInput.setAttribute('name', 'ollama_model');
+    }
+  }
+
+  function populateModels(provider) {
+    const models = providersModels[provider];
+    modelSelect.innerHTML = '';
+    if (models && models.length) {
+      models.forEach(function(m) {
+        const opt = document.createElement('option');
+        opt.value = m[0];
+        opt.textContent = m[1];
+        if (currentProvider === provider && currentModel === m[0]) opt.selected = true;
+        else if (provider === 'openai' && m[0] === defaultOpenai && !currentModel) opt.selected = true;
+        else if (provider === 'gemini' && m[0] === defaultGemini && !currentModel) opt.selected = true;
+        modelSelect.appendChild(opt);
+      });
+      showModelSelect(true);
+    } else {
+      showModelSelect(false);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    populateModels(providerSelect.value);
+  });
+  providerSelect.addEventListener('change', function() {
+    populateModels(this.value);
+  });
+})();
+</script>
+{% endblock %}

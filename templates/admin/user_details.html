@@ -1,0 +1,84 @@
+<div class="modal-header">
+  <h5 class="modal-title">
+    User Details: {{ user.username }}
+    {% if is_admin_user %}
+    <span class="badge bg-primary ms-2">Admin User</span>
+    {% endif %}
+  </h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+  <div class="d-flex justify-content-end mb-3">
+    {% if is_admin_user %}
+      {% if is_superadmin %}
+      <!-- Super Admin can remove Admin Users -->
+      <button class="btn btn-danger btn-sm" onclick="removeUser({{ user.id }}, true)" data-bs-dismiss="modal">
+        Remove Admin User
+      </button>
+      {% endif %}
+    {% else %}
+      <!-- Regular user can be removed by any admin -->
+      <button class="btn btn-danger btn-sm" onclick="removeUser({{ user.id }}, false)" data-bs-dismiss="modal">
+        Remove User
+      </button>
+    {% endif %}
+  </div>
+  <div class="row">
+    <!-- Left Column -->
+    <div class="col-md-6 d-flex flex-column">
+      <!-- Statistics -->
+      <div class="mb-3">
+        <h6>Statistics</h6>
+        <ul class="list-unstyled">
+          <li>Projects: {{ stats.projects }}</li>
+          <li>Documents: {{ stats.documents }}</li>
+          <li>Joined: {{ stats.created_at.strftime('%Y-%m-%d') }}</li>
+        </ul>
+      </div>
+
+      <!-- Payment history removed – credits/payments are no longer tracked -->
+    </div>
+
+    <!-- Right Column (placeholder for future analytics if needed) -->
+    <div class="col-md-6 d-flex flex-column">
+      <h6>Usage Overview</h6>
+      <p class="text-muted">Credits and payment tracking have been removed. The app is now free to use.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  function removeUser(userId, isAdminUser) {
+    let confirmMessage = isAdminUser 
+      ? "Are you sure you want to remove this admin user? This action cannot be undone." 
+      : "Are you sure you want to remove this user?";
+      
+    if (confirm(confirmMessage)) {
+      fetch(`/admin/user/${userId}/remove`, { method: "POST" })
+        .then((res) => {
+          if (res.status === 403) {
+            // Handle permission error
+            return res.json().then(data => {
+              throw new Error(data.error || "Permission denied");
+            });
+          }
+          return res.json();
+        })
+        .then((data) => {
+          if (data.success) {
+            let message = isAdminUser 
+              ? "Admin user removed successfully!" 
+              : "User removed successfully!";
+            alert(message);
+            window.location.href = '/admin/dashboard';
+          } else {
+            alert("Failed to remove user: " + (data.error || "Unknown error"));
+          }
+        })
+        .catch((error) => {
+          console.error("Error removing user:", error);
+          alert(error.message || "Network error occurred while removing user");
+        });
+    }
+  }
+</script>

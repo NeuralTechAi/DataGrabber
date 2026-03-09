@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register | DataGrabber</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        .alert { padding: 10px; margin-bottom: 10px; }
+        .alert-danger { background: #f8d7da; color: #721c24; }
+        .alert-success { background: #d4edda; color: #155724; }
+        #processingMessage { display: none; color: #007bff; }
+    </style>
+</head>
+<body>
+    <h1>Register</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    <form id="registerForm" method="POST" action="{{ url_for('register') }}">
+        <label for="username">Username:</label><br>
+        <input type="text" name="username" id="username" required><br><br>
+        <label for="email">Email:</label><br>
+        <input type="email" name="email" id="email" required><br><br>
+        <label for="password">Password:</label><br>
+        <input type="password" name="password" id="password" required><br>
+        <small>Password must be at least 8 characters</small><br><br>
+        <button type="submit">Register</button>
+        <span id="processingMessage">Processing...</span>
+    </form>
+    <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const registerForm = document.getElementById('registerForm');
+        if (registerForm) {
+            registerForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                document.getElementById('processingMessage').style.display = 'inline';
+                fetch(registerForm.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: new FormData(registerForm)
+                })
+                .then(async response => {
+                    document.getElementById('processingMessage').style.display = 'none';
+                    let text = await response.text();
+                    try {
+                        let data = JSON.parse(text);
+                        if (response.ok && data.success) {
+                            alert(data.message || "Registration successful!");
+                            window.location.href = data.redirect || "{{ url_for('login') }}";
+                        } else if (data.error) {
+                            alert(data.error);
+                        } else {
+                            alert("Unexpected response");
+                        }
+                    } catch (e) {
+                        window.location.reload();
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('processingMessage').style.display = 'none';
+                    alert("Request failed: " + err);
+                });
+            });
+        }
+    });
+    </script>
+</body>
+</html>

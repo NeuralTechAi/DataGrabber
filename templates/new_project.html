@@ -1,0 +1,437 @@
+{% extends "layout.html" %} {% block title %}New Project - Document Data
+Extractor{% endblock %} {% block content %}
+<div class="mb-4">
+  <h1>
+    <i class="fas fa-folder-plus me-2 text-primary"></i>
+    Create New Project
+  </h1>
+  <p class="text-muted">
+    Set up a new document extraction project with custom test fields
+  </p>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form id="newProjectForm">
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <label for="projectName" class="form-label">Project Name*</label>
+          <input
+            type="text"
+            class="form-control"
+            id="projectName"
+            required
+            placeholder="e.g., Invoice Extractor"
+          />
+          <div class="form-text">Give your project a descriptive name</div>
+        </div>
+        <div class="col-md-6">
+          <label for="projectDescription" class="form-label">Description</label>
+          <input
+            type="text"
+            class="form-control"
+            id="projectDescription"
+            placeholder="e.g., Extract data from invoices"
+          />
+          <div class="form-text">Optional brief description of the project</div>
+        </div>
+      </div>
+
+      <!-- AI Provider and Model are now automatically selected -->
+
+      <div class="mb-4">
+        <label for="storagePathLabel" class="form-label">Storage Location*</label>
+        <div class="row g-2">
+          <div class="col-md-7">
+            <label for="storageBasePath" class="form-label small text-muted mb-1">Base location</label>
+            <select class="form-select" id="storageBasePath" required>
+              <option value="">Loading locations...</option>
+            </select>
+          </div>
+          <div class="col-md-5">
+            <label for="storageFolderName" class="form-label small text-muted mb-1">Project folder name</label>
+            <input
+              type="text"
+              class="form-control"
+              id="storageFolderName"
+              placeholder="e.g., invoice-extractor"
+              required
+            />
+          </div>
+        </div>
+        <div class="input-group mt-2">
+          <span class="input-group-text">
+            <i class="fas fa-folder-open"></i>
+          </span>
+          <input
+            type="text"
+            class="form-control text-start text-muted"
+            id="storagePathLabel"
+            readonly
+            value="Select a base location and folder name"
+          />
+          <input type="hidden" id="storagePath" required />
+        </div>
+        <div class="form-text">
+          <i class="fas fa-folder-open me-1"></i> Choose where project files are stored on disk. This selects a storage folder path; it does not upload any files.
+        </div>
+      </div>
+
+      <h5 class="mb-3">
+        <i class="fas fa-list me-2 text-primary"></i>
+        Data Fields to Extract
+      </h5>
+      <p class="text-muted small mb-3">
+        Define the fields you want to extract from your documents. Each field
+        needs a name and description.
+      </p>
+
+      <div id="fieldsContainer" class="mb-4">
+        <!-- Fields will be added here -->
+      </div>
+
+      <button
+        type="button"
+        id="addFieldBtn"
+        class="btn btn-outline-primary mb-4"
+      >
+        <i class="fas fa-plus me-2"></i> Add Field
+      </button>
+
+      <!-- 1. In your new_form template, modify the submit button to include data-custom-handler: -->
+
+      <div class="d-flex justify-content-between">
+        <a href="/" class="btn btn-light">Cancel</a>
+        <button type="submit" class="btn btn-primary" data-custom-handler>
+          <i class="fas fa-save me-2"></i> Create Project
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Field Template (hidden) -->
+<template id="fieldTemplate">
+  <div class="field-item card mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex align-items-center">
+          <i class="fas fa-grip-vertical me-2 handle" style="cursor: move"></i>
+          <h6 class="mb-0">Field <span class="field-number"></span></h6>
+        </div>
+        <div class="btn-group" role="group">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-secondary move-up"
+            title="Move Up"
+          >
+            <i class="fas fa-arrow-up"></i>
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-secondary move-down"
+            title="Move Down"
+          >
+            <i class="fas fa-arrow-down"></i>
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-danger remove-field"
+            title="Remove Field"
+          >
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Field Name*</label>
+          <input
+            type="text"
+            class="form-control field-name"
+            required
+            placeholder="e.g., Invoice Number"
+          />
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Description*</label>
+          <input
+            type="text"
+            class="form-control field-description"
+            placeholder="e.g., The invoice reference number"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+{% endblock %} {% block scripts %}
+<script>
+  // 2. In your new_form page JavaScript, add manual loading state handling:
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const fieldsContainer = document.getElementById("fieldsContainer");
+    const addFieldBtn = document.getElementById("addFieldBtn");
+    const fieldTemplate = document.getElementById("fieldTemplate");
+    const form = document.getElementById("newProjectForm");
+    const storagePathInput = document.getElementById("storagePath");
+    const storagePathLabel = document.getElementById('storagePathLabel');
+    const storageBasePath = document.getElementById('storageBasePath');
+    const storageFolderName = document.getElementById('storageFolderName');
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    // Store original button content
+    const originalButtonContent = submitButton.innerHTML;
+
+    function sanitizeFolderName(name) {
+      return (name || "")
+        .trim()
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, "-")
+        .replace(/\s+/g, "-");
+    }
+
+    function joinPath(base, folder) {
+      const cleanBase = (base || "").replace(/[\\/]+$/, "");
+      const cleanFolder = sanitizeFolderName(folder);
+      if (!cleanBase || !cleanFolder) return "";
+      return `${cleanBase}/${cleanFolder}`;
+    }
+
+    function updateStoragePathPreview(showToast = false) {
+      const fullPath = joinPath(storageBasePath.value, storageFolderName.value);
+      storagePathInput.value = fullPath;
+      if (fullPath) {
+        storagePathLabel.value = fullPath;
+        storagePathLabel.classList.remove('text-muted');
+        storagePathLabel.classList.add('text-primary');
+        if (showToast) {
+          showNotification(`Storage location selected: ${fullPath}`, "success");
+        }
+      } else {
+        storagePathLabel.value = "Select a base location and folder name";
+        storagePathLabel.classList.add('text-muted');
+        storagePathLabel.classList.remove('text-primary');
+      }
+    }
+
+    function populateStorageLocations() {
+      fetch("/projects/storage-paths", {
+        headers: { Accept: "application/json" },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (!data.success || !Array.isArray(data.paths) || data.paths.length === 0) {
+            throw new Error("No writable storage locations found");
+          }
+          storageBasePath.innerHTML = "";
+          data.paths.forEach((path) => {
+            const option = document.createElement("option");
+            option.value = path;
+            option.textContent = path;
+            storageBasePath.appendChild(option);
+          });
+          if (data.default_path && data.paths.includes(data.default_path)) {
+            storageBasePath.value = data.default_path;
+          }
+          updateStoragePathPreview();
+        })
+        .catch((error) => {
+          storageBasePath.innerHTML = '<option value="">No storage locations available</option>';
+          showNotification(error.message || "Failed to load storage locations", "danger");
+        });
+    }
+
+    storageBasePath.addEventListener("change", () => updateStoragePathPreview(true));
+    storageFolderName.addEventListener("input", () => updateStoragePathPreview(false));
+
+    // Initialize sortable fields
+    let sortable = new Sortable(fieldsContainer, {
+      animation: 150,
+      handle: ".handle",
+      onEnd: function () {
+        updateFieldNumbers();
+      },
+    });
+
+    // Add initial fields
+    addField(); // Add at least one field to start
+    populateStorageLocations();
+
+    // Keep folder name in sync with project name until user edits it manually.
+    let folderNameTouched = false;
+    storageFolderName.addEventListener("input", function () {
+      folderNameTouched = this.value.trim().length > 0;
+    });
+    document.getElementById("projectName").addEventListener("input", function () {
+      if (!folderNameTouched) {
+        storageFolderName.value = sanitizeFolderName(this.value);
+      }
+      updateStoragePathPreview(false);
+    });
+
+    // Add field button
+    addFieldBtn.addEventListener("click", function () {
+      addField();
+    });
+
+    // Field button delegation (remove, move up, move down)
+    fieldsContainer.addEventListener("click", function (e) {
+      const fieldItem = e.target.closest(".field-item");
+
+      if (e.target.closest(".remove-field")) {
+        if (fieldsContainer.children.length > 1) {
+          fieldItem.remove();
+          updateFieldNumbers();
+        } else {
+          showNotification("You need at least one field", "warning");
+        }
+      } else if (e.target.closest(".move-up")) {
+        const prevSibling = fieldItem.previousElementSibling;
+        if (prevSibling) {
+          prevSibling.before(fieldItem);
+          updateFieldNumbers();
+        }
+      } else if (e.target.closest(".move-down")) {
+        const nextSibling = fieldItem.nextElementSibling;
+        if (nextSibling) {
+          nextSibling.after(fieldItem);
+          updateFieldNumbers();
+        }
+      }
+    });
+
+    // Form submission with manual loading state
+    form.addEventListener("submit", function (e) {
+      console.log("Submit event triggered.");
+      e.preventDefault();
+      console.log("Form submission default prevented. Starting validation...");
+
+      // Manually set loading state
+      submitButton.innerHTML =
+        '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+      submitButton.disabled = true;
+
+      const isFormValid = validateForm();
+      console.log("Form validation completed. Is form valid?", isFormValid);
+
+      if (!isFormValid) {
+        // Reset button state on validation failure
+        resetSubmitButton();
+        console.log("Validation failed. Submission stopped.");
+        return;
+      }
+
+      console.log("Validation passed. Preparing to send data...");
+
+      const projectData = {
+        name: document.getElementById("projectName").value,
+        description: document.getElementById("projectDescription").value,
+        storage_path: storagePathInput.value,
+        fields: getFieldsData(),
+      };
+
+      fetch("/projects/new", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(projectData),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            showNotification("Project created successfully!", "success");
+            // Keep the button in loading state while redirecting
+            setTimeout(
+              () => (window.location.href = `/projects/${data.project_id}`),
+              1000
+            );
+          } else {
+            throw new Error(data.error || "Failed to create project");
+          }
+        })
+        .catch((error) => {
+          console.error("Error:", error);
+          showNotification(
+            error.message || "Failed to create project",
+            "danger"
+          );
+          // Reset button state on error
+          resetSubmitButton();
+        });
+    });
+
+    // Helper function to reset submit button
+    function resetSubmitButton() {
+      submitButton.innerHTML = originalButtonContent;
+      submitButton.disabled = false;
+    }
+
+    function addField() {
+      const newField = fieldTemplate.content.cloneNode(true);
+      fieldsContainer.appendChild(newField);
+      updateFieldNumbers();
+    }
+
+    function updateFieldNumbers() {
+      const fields = fieldsContainer.querySelectorAll(".field-item");
+      fields.forEach((field, index) => {
+        field.querySelector(".field-number").textContent = index + 1;
+      });
+    }
+
+    function getFieldsData() {
+      const fields = [];
+      fieldsContainer.querySelectorAll(".field-item").forEach((fieldItem) => {
+        fields.push({
+          name: fieldItem.querySelector(".field-name").value,
+          description: fieldItem.querySelector(".field-description").value,
+        });
+      });
+      return fields;
+    }
+
+    function validateForm() {
+      console.log("--- Starting Form Validation ---");
+      const projectName = document.getElementById("projectName").value.trim();
+      const storagePath = storagePathInput.value.trim();
+
+      if (!projectName) {
+        console.log("Validation FAIL: Project Name is empty.");
+        showNotification("Project Name is required.", "danger");
+        return false;
+      }
+      console.log("Validation PASS: Project Name is present.");
+
+      if (!storagePath) {
+        console.log("Validation FAIL: Storage Path is empty.");
+        showNotification("Storage Path is required.", "danger");
+        return false;
+      }
+      console.log("Validation PASS: Storage Path is present.");
+
+      const fieldItems = fieldsContainer.querySelectorAll(".field-item");
+      if (fieldItems.length === 0) {
+        console.log("Validation FAIL: No fields were added.");
+        showNotification("At least one field is required.", "danger");
+        return false;
+      }
+
+      for (let i = 0; i < fieldItems.length; i++) {
+        const item = fieldItems[i];
+        const fieldNameInput = item.querySelector(".field-name");
+        if (!fieldNameInput.value.trim()) {
+          console.log(`Validation FAIL: Field #${i + 1} is missing a name.`);
+          showNotification(`Field #${i + 1} is missing a name.`, "danger");
+          return false;
+        }
+      }
+      console.log("Validation PASS: All fields are valid.");
+      console.log("--- Form Validation Successful ---");
+      return true;
+    }
+  });
+</script>
+{% endblock %}

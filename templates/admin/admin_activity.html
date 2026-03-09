@@ -1,0 +1,32 @@
+{% extends "layout.html" %} {% block title %}{{ admin.username }}'s Activity{%
+endblock %} {% block content %}
+<div class="container mt-4">
+  <h2>Activity Log for {{ admin.username }}</h2>
+
+  <a href="{{ url_for('admin.list_admins') }}" class="btn btn-secondary mt-3">
+    ← Back to Admins
+  </a>
+
+  <table class="table table-bordered mt-3">
+    <thead>
+      <tr>
+        <th>Action</th>
+        <th>Target User (Email)</th>
+        <th>Timestamp</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for activity in activities %}
+      <tr>
+        <td>{{ activity.action }}</td>
+        <td>
+          {% if activity.target_user_email %} {{ activity.target_user_email }}
+          {% else %} - {% endif %}
+        </td>
+        <td>{{ activity.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

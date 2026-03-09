@@ -1,0 +1,461 @@
+{% extends "layout.html" %} {% block title %}Dashboard - DataGrabber{% endblock
+%} 
+
+{% block scripts %}
+<script>
+  // Dashboard refresh functionality
+  document.addEventListener('DOMContentLoaded', function() {
+    // Refresh button functionality
+    document.getElementById('refresh-dashboard').addEventListener('click', function(e) {
+      e.preventDefault();
+      const refreshBtn = this;
+      const originalHtml = refreshBtn.innerHTML;
+      
+      // Show loading state
+      refreshBtn.innerHTML = '<i class="fas fa-spin fa-sync-alt"></i> Refreshing...';
+      refreshBtn.disabled = true;
+      
+      // Add loading state to cards
+      document.querySelectorAll('.stat-card').forEach(card => {
+        card.classList.add('loading-state');
+      });
+      
+      // Simulate refresh with page reload
+      setTimeout(function() {
+        window.location.reload();
+      }, 800);
+    });
+    
+    // Initialize all tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+  });
+</script>
+{% endblock %}
+
+{% block styles %}
+<style>
+  .dashboard-header {
+    background: linear-gradient(
+      135deg,
+      rgba(59, 130, 246, 0.1),
+      rgba(139, 92, 246, 0.1)
+    );
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .dashboard-header::before {
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%233b82f6' fill-opacity='0.05' fill-rule='evenodd'/%3E%3C/svg%3E");
+    opacity: 0.5;
+  }
+
+  .stat-card {
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+    height: 100%;
+    position: relative;
+  }
+  
+  .stat-card.loading-state::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: var(--radius-lg);
+    z-index: 1;
+  }
+  
+  .stat-card.loading-state::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 30px;
+    height: 30px;
+    margin: -15px 0 0 -15px;
+    border: 3px solid rgba(59, 130, 246, 0.3);
+    border-top-color: rgba(59, 130, 246, 1);
+    border-radius: 50%;
+    z-index: 2;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-xl);
+  }
+
+  .stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .credits-icon {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+  }
+
+  .projects-icon {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+  }
+
+  .documents-icon {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+  }
+
+  .records-icon {
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: white;
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .stat-label {
+    color: var(--gray-500);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    position: relative;
+    padding-bottom: 0.75rem;
+  }
+  
+  .section-title .title-text {
+    display: flex;
+    align-items: center;
+  }
+
+  .section-title::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 50px;
+    height: 3px;
+    background: linear-gradient(
+      90deg,
+      var(--primary-blue),
+      var(--accent-purple)
+    );
+  }
+
+  .activity-card {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+  }
+
+  .activity-item {
+    position: relative;
+    padding: 1rem 1rem 1rem 3rem;
+    transition: all 0.2s ease;
+  }
+
+  .activity-item:not(:last-child) {
+    border-bottom: 1px solid var(--gray-200);
+  }
+
+  .activity-item:hover {
+    background-color: var(--gray-50);
+  }
+
+  .activity-icon {
+    position: absolute;
+    left: 1rem;
+    top: 1.2rem;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.75rem;
+  }
+
+  .icon-document {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+  }
+
+  .icon-payment {
+    background: linear-gradient(135deg, #10b981, #059669);
+  }
+  
+  /* Insight card styling */
+  .insight-card {
+    background-color: #f8fafc;
+    border-left: 4px solid #4f46e5;
+  }
+  
+  /* Empty state styling */
+  .empty-state {
+    padding: 2rem;
+    text-align: center;
+    background-color: var(--gray-50);
+    border-radius: var(--radius-lg);
+    margin: 1rem 0;
+  }
+  
+  .empty-state-icon {
+    font-size: 2.5rem;
+    color: var(--gray-400);
+    margin-bottom: 1rem;
+  }
+  
+  /* Tooltip styles */
+  .tooltip-trigger {
+    cursor: help;
+    color: var(--gray-500);
+    margin-left: 0.5rem;
+  }
+  
+  /* Improve mobile responsiveness */
+  @media (max-width: 768px) {
+    .dashboard-header {
+      padding: 1.5rem;
+    }
+    
+    .stat-icon {
+      width: 50px;
+      height: 50px;
+      font-size: 1.25rem;
+    }
+    
+    .stat-value {
+      font-size: 1.5rem;
+    }
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="dashboard-header">
+  <div class="row align-items-center">
+    <div class="col-md-8">
+      <h1 class="mb-2">Welcome, {{ user.username }}!</h1>
+      <p class="text-muted mb-0">
+        Here's an overview of your DataGrabber account
+      </p>
+    </div>
+  </div>
+  <div class="text-end mt-3">
+    <button id="refresh-dashboard" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-sync-alt me-1" aria-hidden="true"></i> Refresh Dashboard
+    </button>
+  </div>
+</div>
+
+<div class="row g-4 mb-5">
+  <!-- Credits and money balance removed – app is now free to use -->
+
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card p-4 text-center">
+      <div class="stat-icon projects-icon mx-auto">
+        <i class="fas fa-folder" aria-hidden="true"></i>
+      </div>
+      <div class="stat-value">{{ projects|length }}</div>
+      <div class="stat-label">Projects</div>
+      {% if projects|length > 0 %}
+      <div class="d-flex justify-content-center mt-2">
+        <a href="{{ url_for('projects.index') }}" class="btn btn-sm btn-outline-primary">
+          <i class="fas fa-eye me-1" aria-hidden="true"></i> View All
+        </a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card p-4 text-center">
+      <div class="stat-icon documents-icon mx-auto">
+        <i class="fas fa-file-alt" aria-hidden="true"></i>
+      </div>
+      <div class="stat-value">{{ total_documents }}</div>
+      <div class="stat-label">Documents</div>
+    </div>
+  </div>
+
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card p-4 text-center">
+      <div class="stat-icon records-icon mx-auto">
+        <i class="fas fa-database" aria-hidden="true"></i>
+      </div>
+      <div class="stat-value">{{ total_records }}</div>
+      <div class="stat-label">Data Records</div>
+    </div>
+  </div>
+  
+  <!-- Data insights card -->
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card p-4 text-center">
+      <div class="stat-icon mx-auto" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white;">
+        <i class="fas fa-chart-pie" aria-hidden="true"></i>
+      </div>
+      <div class="stat-value">{{ total_records }}</div>
+      <div class="stat-label">Extraction Rate</div>
+      {% if total_documents > 0 %}
+      <div class="small text-muted mt-1">~{{ (total_records / total_documents)|round|int }} records per document</div>
+      {% else %}
+      <div class="small text-muted mt-1">No documents processed yet</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <h3 class="section-title">
+      <div class="title-text">
+        <i class="fas fa-folder me-2 text-primary" aria-hidden="true"></i> Your Projects
+      </div>
+      <a href="{{ url_for('projects.new') }}" class="btn btn-sm btn-primary">
+        <i class="fas fa-plus me-1" aria-hidden="true"></i> New Project
+      </a>
+    </h3>
+
+    {% if projects %}
+    <div class="row row-cols-1 row-cols-md-2 g-4">
+      {% for project in projects %}
+      <div class="col">
+        <div class="card h-100 project-card">
+          <div class="card-body">
+            <h5 class="card-title mb-2">{{ project.name }}</h5>
+            <p class="card-text text-muted small mb-3">
+              {{ project.description or "No description provided" }}
+            </p>
+
+            <div class="d-flex gap-2 mb-3">
+              <span class="badge bg-light-blue text-primary">
+                <i class="fas fa-list-alt me-1"></i> {{ project.fields|length }}
+                Fields
+              </span>
+              <span class="badge bg-light-red text-danger">
+                <i class="fas fa-calendar-alt me-1"></i> {{
+                project.created_at.strftime('%Y-%m-%d') }}
+              </span>
+            </div>
+          </div>
+          <div class="card-footer bg-white">
+            <a
+              href="{{ url_for('projects.view', project_id=project.id) }}"
+              class="btn btn-sm btn-outline-primary w-100"
+            >
+              <i class="fas fa-eye me-1"></i> View Project
+            </a>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="text-center mt-4">
+      <a href="{{ url_for('projects.index') }}" class="btn btn-outline-primary">
+        <i class="fas fa-th-list me-2"></i> View All Projects
+      </a>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">
+        <i class="fas fa-folder-open" aria-hidden="true"></i>
+      </div>
+      <h5>No projects yet</h5>
+      <p class="text-muted">Create your first project to start extracting data from your documents.</p>
+      <a href="{{ url_for('projects.new') }}" class="btn btn-primary">
+        <i class="fas fa-plus-circle me-2" aria-hidden="true"></i> Create First Project
+      </a>
+      
+      <!-- User guidance card -->
+      <div class="card mt-4 border-primary">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fas fa-lightbulb text-warning me-2" aria-hidden="true"></i> Getting Started</h5>
+          <p class="card-text">With DataGrabber, you can extract structured data from various documents. Here's how:</p>
+          <ol class="text-start">
+            <li>Create a project to define your data structure</li>
+            <li>Add fields to specify what data to extract</li>
+            <li>Upload documents to process and extract data</li>
+            <li>View and export your structured data</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-4">
+    <div class="mb-4">
+      <h3 class="section-title">
+        <div class="title-text">
+          <i class="fas fa-clock me-2 text-primary" aria-hidden="true"></i> Recent Activity
+        </div>
+      </h3>
+
+      <div class="activity-card">
+        <div class="list-group list-group-flush">
+          {% if recent_documents %} {% for document in recent_documents %}
+          <div class="activity-item">
+            <span class="activity-icon icon-document">
+              <i class="fas fa-file-alt" aria-hidden="true"></i>
+            </span>
+            <div>
+              <p class="mb-1 fw-semibold">{{ document.filename }}</p>
+              <p class="text-muted small mb-0">
+                Uploaded {{ document.uploaded_at.strftime('%Y-%m-%d %H:%M') }}
+              </p>
+            </div>
+          </div>
+          {% endfor %} {% endif %} {% if not recent_documents %}
+          <div class="empty-state py-4">
+            <div class="empty-state-icon">
+              <i class="fas fa-history" aria-hidden="true"></i>
+            </div>
+            <h6>No Activity Yet</h6>
+            <p class="text-muted small">Your recent uploads and payments will appear here</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

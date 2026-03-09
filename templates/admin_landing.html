@@ -1,0 +1,41 @@
+{% extends "layout.html" %} {% block title %}Admin Panel{% endblock %} {% block
+content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+      <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+          <h4 class="mb-0">Admin Panel</h4>
+        </div>
+        <div class="card-body text-center">
+          <a
+            href="{{ url_for('auth.admin_login') }}"
+            class="btn btn-primary w-100 mb-3"
+          >
+            Admin Login
+          </a>
+
+          {# Only show register button if no superadmin exists OR logged-in
+          superadmin #} {% if superadmin_exists is not defined or not
+          superadmin_exists %}
+          <a
+            href="{{ url_for('auth.admin_register') }}"
+            class="btn btn-outline-primary w-100 mb-3"
+          >
+            Register Superadmin
+          </a>
+          {% elif g.admin is defined and g.admin is not none and
+          g.admin.is_superadmin %}
+          <a
+            href="{{ url_for('auth.admin_register') }}"
+            class="btn btn-outline-primary w-100 mb-3"
+          >
+            Register New Admin
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

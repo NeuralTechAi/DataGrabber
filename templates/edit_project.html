@@ -1,0 +1,595 @@
+{% extends "layout.html" %} {% block title %}Edit Project - {{ project.name }}{%
+endblock %} {% block content %}
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">Projects</a></li>
+      <li class="breadcrumb-item">
+        <a href="/projects/{{ project.id }}">{{ project.name }}</a>
+      </li>
+      <li class="breadcrumb-item active">Edit</li>
+    </ol>
+  </nav>
+
+  <h1>
+    <i class="fas fa-edit me-2 text-primary"></i>
+    Edit Project
+  </h1>
+  <p class="text-muted">Modify project details and extraction fields</p>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form id="editProjectForm">
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <label for="projectName" class="form-label">Project Name*</label>
+          <input
+            type="text"
+            class="form-control"
+            id="projectName"
+            required
+            placeholder="e.g., Invoice Extractor"
+            value="{{ project.name }}"
+          />
+          <div class="form-text">Give your project a descriptive name</div>
+        </div>
+        <div class="col-md-6">
+          <label for="projectDescription" class="form-label">Description</label>
+          <input
+            type="text"
+            class="form-control"
+            id="projectDescription"
+            placeholder="e.g., Extract data from invoices"
+            value="{{ project.description or '' }}"
+          />
+          <div class="form-text">Optional brief description of the project</div>
+        </div>
+      </div>
+
+      <!-- AI Provider and Model are now automatically managed -->
+
+      <div class="mb-4">
+        <label for="storagePathLabel" class="form-label">Storage Location*</label>
+        <div class="input-group">
+          <input
+            type="file"
+            class="form-control"
+            id="directoryInput"
+            webkitdirectory
+            directory
+            multiple
+            style="display: none;"
+            aria-label="Choose folder for storage"
+          />
+          <button
+            type="button"
+            class="form-control text-start"
+            id="storagePathLabel"
+            style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          >
+            {{ project.storage_path }}
+          </button>
+          <input
+            type="hidden"
+            id="storagePath"
+            required
+            value="{{ project.storage_path }}"
+          />
+          <button
+            class="btn btn-outline-primary"
+            type="button"
+            id="browseStorageBtn"
+          >
+            <i class="fas fa-folder-open me-2"></i> Choose folder
+          </button>
+        </div>
+        <div class="form-text">
+          <i class="fas fa-folder-open me-1"></i> Folder where this project’s files are stored. Click “Choose folder” to change the location (you are selecting a storage folder, not uploading documents).
+        </div>
+      </div>
+
+      <h5 class="mb-3">
+        <i class="fas fa-list me-2 text-primary"></i>
+        Data Fields to Extract
+      </h5>
+      <p class="text-muted small mb-3">
+        Define the fields you want to extract from your documents. Each field
+        needs a name and description.
+      </p>
+
+      <div id="fieldsContainer" class="mb-4">
+        <!-- Existing fields will be loaded here -->
+        {% for field in project.fields %}
+        <div class="field-item card mb-3">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="d-flex align-items-center">
+                <i
+                  class="fas fa-grip-vertical me-2 handle"
+                  style="cursor: move"
+                ></i>
+                <h6 class="mb-0">
+                  Field <span class="field-number">{{ loop.index }}</span>
+                </h6>
+              </div>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger remove-field"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Field Name*</label>
+                <input
+                  type="text"
+                  class="form-control field-name"
+                  required
+                  placeholder="e.g., Invoice Number"
+                  value="{{ field.name }}"
+                />
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Description*</label>
+                <input
+                  type="text"
+                  class="form-control field-description"
+                  required
+                  placeholder="e.g., The invoice reference number"
+                  value="{{ field.description }}"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <button
+        type="button"
+        id="addFieldBtn"
+        class="btn btn-outline-primary mb-4"
+      >
+        <i class="fas fa-plus me-2"></i> Add Field
+      </button>
+
+      <div class="alert alert-warning" role="alert">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>Important:</strong> Changing field names may affect existing
+        data records.
+      </div>
+
+      <div class="d-flex justify-content-between">
+        <div>
+          <a href="/projects/{{ project.id }}" class="btn btn-light">Cancel</a>
+          <button type="button" class="btn btn-outline-danger ms-2" id="deleteProjectBtn">
+            <i class="fas fa-trash me-2"></i> Delete Project
+          </button>
+        </div>
+        <button type="submit" class="btn btn-primary" data-custom-handler>
+          <i class="fas fa-save me-2"></i> Save Changes
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Field Template (hidden) -->
+<template id="fieldTemplate">
+  <div class="field-item card mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex align-items-center">
+          <i class="fas fa-grip-vertical me-2 handle" style="cursor: move"></i>
+          <h6 class="mb-0">Field <span class="field-number"></span></h6>
+        </div>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-danger remove-field"
+        >
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Field Name*</label>
+          <input
+            type="text"
+            class="form-control field-name"
+            required
+            placeholder="e.g., Invoice Number"
+          />
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Description*</label>
+          <input
+            type="text"
+            class="form-control field-description"
+            required
+            placeholder="e.g., The invoice reference number"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- Storage Path Change Warning Modal -->
+<div
+  class="modal fade"
+  id="storagePathWarningModal"
+  tabindex="-1"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Change Storage Location</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning" role="alert">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          Changing the storage location will copy all project files to the new
+          location.
+        </div>
+
+        <p>Current location:</p>
+        <pre class="p-2 bg-light mb-3">{{ project.storage_path }}</pre>
+
+        <p>New location:</p>
+        <pre class="p-2 bg-light mb-3" id="newPathDisplay"></pre>
+
+        <p class="text-muted small">
+          Note: The original files will remain in their current location. The
+          application will use the new location for all future operations.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" id="confirmPathChange">
+          Continue
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Project Confirmation Modal -->
+<div class="modal fade" id="deleteProjectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-exclamation-triangle text-danger me-2"></i>
+          Confirm Project Deletion
+        </h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger" role="alert">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          <strong>Warning:</strong> This action cannot be undone!
+        </div>
+        <p class="mb-2">Are you sure you want to delete the project <strong>"{{ project.name }}"</strong>?</p>
+        <p class="text-muted small">This will permanently delete:</p>
+        <ul class="text-muted small">
+          <li>All extracted data and records</li>
+          <li>All uploaded documents</li>
+          <li>All project files and storage</li>
+          <li>Project configuration and fields</li>
+        </ul>
+        <div class="form-check mt-3">
+          <input class="form-check-input" type="checkbox" id="deleteFilesCheckbox" checked>
+          <label class="form-check-label" for="deleteFilesCheckbox">
+            Also delete all project files from storage
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteProject">
+          <i class="fas fa-trash me-2"></i>
+          Delete Project
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %} {% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const fieldsContainer = document.getElementById("fieldsContainer");
+    const addFieldBtn = document.getElementById("addFieldBtn");
+    const fieldTemplate = document.getElementById("fieldTemplate");
+    const form = document.getElementById("editProjectForm");
+    const storagePathInput = document.getElementById("storagePath");
+    const browseStorageBtn = document.getElementById("browseStorageBtn");
+    const submitButton = form.querySelector('button[type="submit"]');
+    const storagePathWarningModal = new bootstrap.Modal(
+      document.getElementById("storagePathWarningModal")
+    );
+    const newPathDisplay = document.getElementById("newPathDisplay");
+    const confirmPathChange = document.getElementById("confirmPathChange");
+
+    let newStoragePath = null;
+    // Store original button content
+    const originalButtonContent = submitButton.innerHTML;
+
+    // Handle storage location browsing using HTML5 directory input
+    const directoryInput = document.getElementById('directoryInput');
+    const storagePathLabel = document.getElementById('storagePathLabel');
+    const currentPath = storagePathInput.value;
+
+    // When Browse button is clicked, trigger the directory input
+    browseStorageBtn.addEventListener("click", function() {
+      directoryInput.click();
+    });
+
+    // Also allow clicking on the label to trigger directory selection
+    storagePathLabel.addEventListener('click', function() {
+      directoryInput.click();
+    });
+
+    // When the user selects a directory via the native file picker
+    directoryInput.addEventListener('change', function() {
+      if (this.files && this.files.length > 0) {
+        // Get the folder name from the first file's path
+        const firstFile = this.files[0];
+        const folderPath = firstFile.webkitRelativePath.split('/')[0];
+
+        // Check if the new path is different from the current one
+        const oldPath = storagePathInput.value;
+
+        if (folderPath !== oldPath) {
+          // Show the storage path warning modal
+          newStoragePath = folderPath;
+          newPathDisplay.textContent = folderPath;
+          storagePathWarningModal.show();
+        } else {
+          // Same folder selected, no need for confirmation
+          showNotification(`Same storage location selected`, "info");
+        }
+      }
+    });
+
+    // Confirm path change
+    confirmPathChange.addEventListener("click", function () {
+      if (newStoragePath) {
+        // Update the storage path input and label
+        storagePathInput.value = newStoragePath;
+        storagePathLabel.textContent = newStoragePath;
+        storagePathLabel.classList.add('text-primary');
+        newStoragePath = null;
+
+        showNotification(`Storage location will be changed`, "success");
+      }
+      storagePathWarningModal.hide();
+    });
+
+    // Confirm path change
+    confirmPathChange.addEventListener("click", function () {
+      if (newStoragePath) {
+        storagePathInput.value = newStoragePath;
+        newStoragePath = null;
+      }
+      storagePathWarningModal.hide();
+    });
+
+    // Add field functionality
+    addFieldBtn.addEventListener("click", function () {
+      addField();
+    });
+
+    // Initialize sortable fields
+    let sortable = new Sortable(fieldsContainer, {
+      animation: 150,
+      handle: ".handle",
+      onEnd: function () {
+        updateFieldNumbers();
+      },
+    });
+
+    // Field button delegation (remove, move up, move down)
+    fieldsContainer.addEventListener("click", function (e) {
+      const fieldItem = e.target.closest(".field-item");
+      if (!fieldItem) return;
+
+      if (e.target.closest(".remove-field")) {
+        if (fieldsContainer.children.length > 1) {
+          fieldItem.remove();
+          updateFieldNumbers();
+        } else {
+          showNotification("You need at least one field", "warning");
+        }
+      } else if (e.target.closest(".move-up")) {
+        const prevSibling = fieldItem.previousElementSibling;
+        if (prevSibling) {
+          prevSibling.before(fieldItem);
+          updateFieldNumbers();
+        }
+      } else if (e.target.closest(".move-down")) {
+        const nextSibling = fieldItem.nextElementSibling;
+        if (nextSibling) {
+          nextSibling.after(fieldItem);
+          updateFieldNumbers();
+        }
+      }
+    });
+
+    // Form submission
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      // Manually set loading state
+      submitButton.innerHTML =
+        '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+      submitButton.disabled = true;
+
+      if (!validateForm()) {
+        showNotification("Please fill all required fields", "danger");
+        resetSubmitButton();
+        return;
+      }
+
+      const projectData = {
+        name: document.getElementById("projectName").value,
+        description: document.getElementById("projectDescription").value,
+        storage_path: storagePathInput.value,
+        fields: getFieldsData(),
+      };
+
+      fetch(`/projects/{{ project.id }}/edit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(projectData),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            showNotification("Project updated successfully!", "success");
+            setTimeout(
+              () => (window.location.href = `/projects/{{ project.id }}`),
+              1000
+            );
+          } else {
+            throw new Error(data.error || "Failed to update project");
+          }
+        })
+        .catch((error) => {
+          console.error("Error:", error);
+          showNotification(
+            error.message || "Failed to update project",
+            "danger"
+          );
+          // Reset button state on error
+          resetSubmitButton();
+        });
+    });
+
+    function resetSubmitButton() {
+      submitButton.innerHTML = originalButtonContent;
+      submitButton.disabled = false;
+    }
+
+    function addField() {
+      const newField = fieldTemplate.content.cloneNode(true);
+      fieldsContainer.appendChild(newField);
+      updateFieldNumbers();
+    }
+
+    function updateFieldNumbers() {
+      const fields = fieldsContainer.querySelectorAll(".field-item");
+      fields.forEach((field, index) => {
+        field.querySelector(".field-number").textContent = index + 1;
+      });
+    }
+
+    function getFieldsData() {
+      const fields = [];
+      fieldsContainer.querySelectorAll(".field-item").forEach((fieldItem) => {
+        fields.push({
+          name: fieldItem.querySelector(".field-name").value,
+          description: fieldItem.querySelector(".field-description").value,
+        });
+      });
+      return fields;
+    }
+
+    function validateForm() {
+      if (!document.getElementById("projectName").value.trim()) {
+        return false;
+      }
+
+      if (!storagePathInput.value) {
+        return false;
+      }
+
+      const fieldItems = fieldsContainer.querySelectorAll(".field-item");
+      for (const item of fieldItems) {
+        const name = item.querySelector(".field-name").value.trim();
+        const description = item
+          .querySelector(".field-description")
+          .value.trim();
+
+        if (!name || !description) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    // Delete project functionality
+    const deleteProjectBtn = document.getElementById('deleteProjectBtn');
+    const deleteProjectModal = new bootstrap.Modal(
+      document.getElementById('deleteProjectModal')
+    );
+
+    if (deleteProjectBtn) {
+      deleteProjectBtn.addEventListener('click', function() {
+        deleteProjectModal.show();
+      });
+    }
+
+    document.getElementById('confirmDeleteProject').addEventListener('click',
+      async function() {
+        const deleteFiles = document.getElementById('deleteFilesCheckbox').checked;
+        
+        // Disable the button and show loading
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Deleting...';
+        
+        try {
+          const response = await fetch(`/projects/{{ project.id }}/delete`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ delete_files: deleteFiles })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            showNotification('Project deleted successfully', 'success');
+            setTimeout(() => window.location.href = '/', 1500);
+          } else {
+            throw new Error(data.error || 'Failed to delete project');
+          }
+        } catch (error) {
+          console.error('Error deleting project:', error);
+          showNotification(error.message || 'Failed to delete project', 'danger');
+          // Re-enable button on error
+          this.disabled = false;
+          this.innerHTML = '<i class="fas fa-trash me-2"></i>Delete Project';
+        }
+      }
+    );
+
+    // Initialize existing fields numbering
+    updateFieldNumbers();
+  });
+</script>
+{% endblock %} newPathDisplay.textContent = data.path;

@@ -1,0 +1,55 @@
+{% extends "layout.html" %} {% block title %}AI Settings{% endblock %} {% block
+content %}
+<div class="container mt-4">
+  <h2>AI Provider & Model Settings</h2>
+  <form method="post">
+    <div class="mb-3">
+      <label class="form-label">Provider</label>
+      <select name="provider" id="providerSelect" class="form-select">
+        {% for provider in providers %}
+        <option value="{{ provider }}">{{ provider|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Model</label>
+      <select name="model" id="modelSelect" class="form-select">
+        <!-- Models will be populated by JS -->
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">API Key</label>
+      <input type="text" name="api_key" class="form-control" value="" />
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+  </form>
+</div>
+<script>
+  // Available models for each provider (from backend context)
+  const providerModels = {{ providers|tojson }};
+  const providerSelect = document.getElementById('providerSelect');
+  const modelSelect = document.getElementById('modelSelect');
+
+  function populateModels(provider) {
+    modelSelect.innerHTML = '';
+    if (providerModels[provider]) {
+      providerModels[provider].forEach(function(model) {
+        const opt = document.createElement('option');
+        opt.value = model;
+        opt.textContent = model;
+        modelSelect.appendChild(opt);
+      });
+    }
+  }
+
+  // On page load, populate models for the selected provider
+  document.addEventListener('DOMContentLoaded', function() {
+    populateModels(providerSelect.value);
+  });
+
+  // When provider changes, update models
+  providerSelect.addEventListener('change', function() {
+    populateModels(this.value);
+  });
+</script>
+{% endblock %}

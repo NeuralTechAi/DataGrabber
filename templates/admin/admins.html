@@ -1,0 +1,70 @@
+{% extends "layout.html" %} {% block title %}Manage Admins{% endblock %} {%
+block content %}
+<div class="container mt-4">
+  <h2>Registered Admins</h2>
+  <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary mt-3">
+    ← Back to Dashboard
+  </a>
+  <table class="table table-bordered mt-3">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Username</th>
+        <th>Email</th>
+        <th>Superadmin</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for admin in admins %}
+      <tr>
+        <td>{{ admin.id }}</td>
+        <td>{{ admin.username }}</td>
+        <td>{{ admin.email }}</td>
+        <td>
+          {% if admin.is_superadmin %}
+          <span class="badge bg-primary">Superadmin</span>
+          {% else %}
+          <span class="badge bg-secondary">Admin</span>
+          {% endif %}
+        </td>
+        <td>{{ admin.created_at.strftime('%Y-%m-%d') }}</td>
+        <td>
+          {% if not admin.is_superadmin %}
+          <button
+            class="btn btn-danger btn-sm"
+            onclick="removeAdmin({{ admin.id }})"
+          >
+            Remove
+          </button>
+          {% endif %}
+          <a
+            href="{{ url_for('admin.view_admin_activity', admin_id=admin.id) }}"
+            class="btn btn-info btn-sm"
+          >
+            View Activity
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  function removeAdmin(adminId) {
+    if (confirm("Are you sure you want to remove this admin?")) {
+      fetch(`/admin/${adminId}/remove`, { method: "POST" })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) {
+            location.reload();
+          } else {
+            alert(data.error || "Failed to remove admin");
+          }
+        });
+    }
+  }
+</script>
+{% endblock %}
