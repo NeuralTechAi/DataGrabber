@@ -970,88 +970,68 @@ class BackgroundProcessor:
             job.complete_with_error(f"Error in completion: {str(e)}")
     
     def _process_file_upload_job(self, job):
-        """Process uploaded files with progress tracking"""
+        """Process uploaded files in parallel (same fast path as folder jobs).
+
+        Uses ThreadPoolExecutor + _process_single_file_direct for parallel API
+        calls and buffered Excel writes instead of sequential DocumentService path.
+        """
         if not self.app:
             from app import create_app
             self.app = create_app()
-            
+
         try:
             with self.app.app_context():
                 file_paths = job.result_data.get('file_paths', [])
                 if not file_paths:
                     job.complete_with_error("No files to process")
                     return
-                
-                logger.info(f"Starting file upload processing for job {job.id}: {len(file_paths)} files")
-                
-                # Initialize counters
+
+                project = Project.query.get(job.project_id)
+                if not project:
+                    job.complete_with_error("Project not found")
+                    return
+
+                logger.info(f"Starting file upload processing for job {job.id}: {len(file_paths)} files (parallel)")
+
+                files_to_process = []
+                for fp in file_paths:
+                    filename = os.path.basename(fp)
+                    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+                    if self._is_supported_file(filename):
+                        files_to_process.append((filename, fp, ext))
+
                 total_processed = 0
                 total_failed = 0
                 total_skipped = 0
                 total_credits_used = 0
-                
-                # Get user and project
-                user = User.query.get(job.user_id)
-                project = Project.query.get(job.project_id)
-                
-                if not user or not project:
-                    job.complete_with_error("User or project not found")
-                    return
-                
-                # Process files one by one with progress updates
-                for i, file_path in enumerate(file_paths):
-                    try:
-                        filename = os.path.basename(file_path)
-                        logger.info(f"Processing file {i+1}/{len(file_paths)}: {filename}")
-                        
-                        # Check if file already exists in project
-                        existing_doc = Document.query.filter_by(
-                            project_id=project.id, 
-                            filename=filename
-                        ).first()
-                        
-                        if existing_doc and existing_doc.processed:
-                            logger.info(f"Skipping {filename} - already processed")
-                            total_skipped += 1
-                        else:
-                            # Calculate file credits
-                            if filename.lower().endswith('.pdf'):
-                                try:
-                                    pages = DocumentService.get_pdf_page_count(file_path)
-                                except:
-                                    pages = 1
-                            else:
-                                pages = 1
-                            
-                            file_credits = pages * 1  # 1 credit per page
-                            
-                            # Create document record
-                            file_ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-                            file_type = DocumentService._get_file_type_category(file_ext)
-                            
-                            document = Document(
-                                project_id=project.id,
-                                filename=filename,
-                                file_path=file_path,
-                                file_type=file_type,
-                                page_count=pages
-                            )
-                            
-                            db.session.add(document)
-                            db.session.flush()  # Get document ID
-                            
-                            # Process the document
-                            success = DocumentService.process_document(document.id)
-                            
-                            if success:
+
+                with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                    future_to_file = {
+                        executor.submit(
+                            self._process_single_file_direct,
+                            filename, file_path, file_ext, project.id
+                        ): filename
+                        for filename, file_path, file_ext in files_to_process
+                    }
+
+                    for future in as_completed(future_to_file):
+                        fn = future_to_file[future]
+                        try:
+                            result = future.result()
+                            if result['success']:
                                 total_processed += 1
-                                # Credits accounting removed – app is free to use
-                                logger.info(f"Successfully processed: {filename}")
+                                total_credits_used += result.get('credits_used', 0)
                             else:
-                                total_failed += 1
-                                logger.error(f"Failed to process: {filename}")
-                        
-                        # Update progress after each file
+                                err = result.get('error', '')
+                                if 'already processed' in err.lower() or 'duplicate' in err.lower():
+                                    total_skipped += 1
+                                else:
+                                    total_failed += 1
+                                    logger.error(f"Failed {fn}: {err}")
+                        except Exception as e:
+                            total_failed += 1
+                            logger.error(f"Error processing {fn}: {e}")
+
                         job.update_progress(
                             processed=total_processed,
                             failed=total_failed,
@@ -1060,15 +1040,6 @@ class BackgroundProcessor:
                             absolute=True
                         )
 
-                    except Exception as file_error:
-                        logger.error(f"Error processing file {filename}: {file_error}")
-                        total_failed += 1
-                        continue
-                
-                # No credit or balance deduction – app is free to use
-                db.session.commit()
-                
-                # Complete the job with final statistics
                 self._complete_file_processing(job, total_processed, total_failed, total_skipped, total_credits_used)
                 
         except Exception as e:

@@ -285,9 +285,11 @@ def upload(project_id):
     if not files:
         return jsonify({'error': 'No selected files'}), 400
     
-    # Log file details
-    for i, file in enumerate(files):
-        logger.info(f"File {i}: {file.filename}, size: {file.content_length if hasattr(file, 'content_length') else 'unknown'}")
+    if logger.isEnabledFor(logging.DEBUG):
+        for i, file in enumerate(files[:5]):  # Log first 5 only
+            logger.debug(f"File {i}: {file.filename}")
+        if len(files) > 5:
+            logger.debug(f"... and {len(files) - 5} more")
     
     # Save files temporarily and queue for background processing
     try:
@@ -303,7 +305,6 @@ def upload(project_id):
                 temp_path = os.path.abspath(os.path.join(abs_storage_path, secure_filename(file.filename)))
                 file.save(temp_path)
                 temp_file_paths.append(temp_path)
-                logger.info(f"Saved temp file: {temp_path}")
         
         if not temp_file_paths:
             return jsonify({'error': 'No valid files to process'}), 400
