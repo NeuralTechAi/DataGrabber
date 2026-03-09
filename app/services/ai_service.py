@@ -300,25 +300,37 @@ class AIService:
         """Extract structured data from text using Gemini with JSON output."""
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        gemini_model = genai.GenerativeModel(model_name=model)
+        gemini_model = genai.GenerativeModel(
+            model_name=model,
+            system_instruction=(
+                "You are an expert data extraction assistant. Your job is to read documents "
+                "and extract specific fields with high precision. Always return a valid JSON object. "
+                "Never invent data. Search thoroughly before concluding a field is absent."
+            ),
+        )
+        text_snippet = text_content[: AIService._MAX_TEXT_CHARS]
         prompt = (
             AIService._build_json_prompt(
                 fields,
-                context_hint="Carefully read the following text and extract the requested information.",
+                context_hint="Read the following document text carefully and extract every requested field.",
             )
-            + f"\n\nTEXT CONTENT:\n{text_content}"
+            + f"\n\n--- DOCUMENT TEXT START ---\n{text_snippet}\n--- DOCUMENT TEXT END ---"
         )
 
         def _call():
             try:
                 return gemini_model.generate_content(
                     prompt,
-                    generation_config={"temperature": 0.0, "response_mime_type": "application/json"},
+                    generation_config={
+                        "temperature": 0.0,
+                        "response_mime_type": "application/json",
+                        "max_output_tokens": 4096,
+                    },
                 )
             except Exception:
                 return gemini_model.generate_content(
                     prompt,
-                    generation_config={"temperature": 0.0},
+                    generation_config={"temperature": 0.0, "max_output_tokens": 4096},
                 )
 
         response = _call_with_backoff(_call)
@@ -329,12 +341,13 @@ class AIService:
         """Extract structured data from text using OpenAI with JSON output."""
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
+        text_snippet = text_content[: AIService._MAX_TEXT_CHARS]
         prompt = (
             AIService._build_json_prompt(
                 fields,
-                context_hint="Carefully read the following text and extract the requested information.",
+                context_hint="Read the following document text carefully and extract every requested field.",
             )
-            + f"\n\nTEXT CONTENT:\n{text_content}"
+            + f"\n\n--- DOCUMENT TEXT START ---\n{text_snippet}\n--- DOCUMENT TEXT END ---"
         )
         kwargs = dict(
             model=model,
@@ -343,13 +356,15 @@ class AIService:
                 {
                     "role": "system",
                     "content": (
-                        "You are a precise data extraction assistant. "
-                        "Respond ONLY with a valid JSON object containing the extracted fields."
+                        "You are an expert data extraction assistant. "
+                        "Read the document carefully, search for every field thoroughly "
+                        "(including synonyms and label variations), and respond ONLY with "
+                        "a valid JSON object. Never invent data. Never copy labels as values."
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=2000,
+            max_tokens=4096,
         )
 
         def _call():
@@ -367,12 +382,13 @@ class AIService:
         """Extract structured data from text using OpenRouter (OpenAI-compatible) with JSON output."""
         from openai import OpenAI
         client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
+        text_snippet = text_content[: AIService._MAX_TEXT_CHARS]
         prompt = (
             AIService._build_json_prompt(
                 fields,
-                context_hint="Carefully read the following text and extract the requested information.",
+                context_hint="Read the following document text carefully and extract every requested field.",
             )
-            + f"\n\nTEXT CONTENT:\n{text_content}"
+            + f"\n\n--- DOCUMENT TEXT START ---\n{text_snippet}\n--- DOCUMENT TEXT END ---"
         )
         kwargs = dict(
             model=model,
@@ -381,13 +397,15 @@ class AIService:
                 {
                     "role": "system",
                     "content": (
-                        "You are a precise data extraction assistant. "
-                        "Respond ONLY with a valid JSON object containing the extracted fields."
+                        "You are an expert data extraction assistant. "
+                        "Read the document carefully, search for every field thoroughly "
+                        "(including synonyms and label variations), and respond ONLY with "
+                        "a valid JSON object. Never invent data. Never copy labels as values."
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=2000,
+            max_tokens=4096,
         )
 
         def _call():
@@ -405,12 +423,13 @@ class AIService:
         """Extract structured data from text using an Ollama-compatible OpenAI endpoint with JSON output."""
         from openai import OpenAI
         client = OpenAI(api_key=api_key or "ollama", base_url=base_url)
+        text_snippet = text_content[: AIService._MAX_TEXT_CHARS]
         prompt = (
             AIService._build_json_prompt(
                 fields,
-                context_hint="Carefully read the following text and extract the requested information.",
+                context_hint="Read the following document text carefully and extract every requested field.",
             )
-            + f"\n\nTEXT CONTENT:\n{text_content}"
+            + f"\n\n--- DOCUMENT TEXT START ---\n{text_snippet}\n--- DOCUMENT TEXT END ---"
         )
         kwargs = dict(
             model=model,
@@ -419,13 +438,15 @@ class AIService:
                 {
                     "role": "system",
                     "content": (
-                        "You are a precise data extraction assistant. "
-                        "Respond ONLY with a valid JSON object containing the extracted fields."
+                        "You are an expert data extraction assistant. "
+                        "Read the document carefully, search for every field thoroughly "
+                        "(including synonyms and label variations), and respond ONLY with "
+                        "a valid JSON object. Never invent data. Never copy labels as values."
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=2000,
+            max_tokens=4096,
         )
 
         def _call():
@@ -442,70 +463,171 @@ class AIService:
     #  Shared helpers for prompt construction and response parsing        #
     # ------------------------------------------------------------------ #
 
+    # Maximum characters of text content sent to the AI (prevents context overflow)
+    _MAX_TEXT_CHARS = 60_000
+
     @staticmethod
     def _build_json_prompt(fields: list, context_hint: str = "") -> str:
-        """Build a prompt that instructs the model to return a strict JSON object."""
-        field_specs = "\n".join(
-            f'  "{f["name"]}": <{f.get("description", f["name"])}>'
-            for f in fields
-        )
+        """Build a rich, detailed extraction prompt that maximises accuracy.
+
+        Improvements over the previous version:
+        - Instructs the model to search for synonym / label variations
+        - Explicit rules for tables, forms, and labeled boxes
+        - Currency, date, and list normalisation guidance
+        - Shows each field with its description as an extraction hint
+        - Includes a concrete example to anchor output format
+        - Stronger "do not invent / do not copy labels" rules
+        """
+        # Per-field specification lines with description as extraction hint
+        field_spec_lines = []
+        for f in fields:
+            name = f["name"]
+            desc = (f.get("description") or "").strip()
+            hint_text = f" — {desc}" if desc and desc.lower() != name.lower() else ""
+            field_spec_lines.append(f'  "{name}": "<value>{hint_text}"')
+        field_specs = "\n".join(field_spec_lines)
         field_names = ", ".join(f'"{f["name"]}"' for f in fields)
+
+        # Concrete mini-example anchors the expected format
+        example_pairs = []
+        for f in fields[:4]:
+            example_pairs.append(f'  "{f["name"]}": "extracted value here"')
+        example_block = "{\n" + ",\n".join(example_pairs)
+        if len(fields) > 4:
+            example_block += ',\n  "...": "..."'
+        example_block += "\n}"
+
         intro = f"{context_hint}\n\n" if context_hint else ""
+
         return (
             f"{intro}"
-            f"Extract the following fields and return ONLY a valid JSON object "
-            f"with exactly these keys: {field_names}\n\n"
-            f"Expected JSON structure:\n{{\n{field_specs}\n}}\n\n"
-            "Rules:\n"
-            "- Search the ENTIRE document for each field — check every section\n"
-            "- For list fields (skills, technologies, experience items), join with ', '\n"
-            '- If a field truly cannot be found anywhere, use exactly: "Not found"\n'
-            "- Strip any surrounding markdown, bullets, or numbering from values\n"
-            "- Return ONLY the JSON object — no explanation, no extra text"
+            "TASK: Extract specific fields from this document and return them as a JSON object.\n\n"
+            f"FIELDS TO EXTRACT:\n{{\n{field_specs}\n}}\n\n"
+            "EXTRACTION RULES (follow every rule carefully):\n"
+            "1. SCAN THE ENTIRE DOCUMENT — check every section, page, header, footer, table, "
+            "   form field, label, and footnote before concluding a field is missing.\n"
+            "2. SYNONYM SEARCH — each field name may appear under a different label in the document.\n"
+            "   Examples of variations to look for:\n"
+            "   • 'invoice_number' → 'Invoice #', 'Inv No.', 'Reference', 'Doc Number'\n"
+            "   • 'total_amount' → 'Total', 'Amount Due', 'Grand Total', 'Balance', 'Net Pay'\n"
+            "   • 'employee_name' → 'Name', 'Employee', 'Staff Name', 'Worker', 'Payee'\n"
+            "   • 'date' → 'Date Issued', 'Pay Date', 'Period', 'Invoice Date', 'Issue Date'\n"
+            "   Apply the same logic to ALL fields.\n"
+            "3. TABLES & FORMS — if the value sits in a table cell or box next to a label,\n"
+            "   extract the value, NOT the label text itself.\n"
+            "4. DATES — return in the format found in the document (e.g. '12 Mar 2024', '2024-03-12').\n"
+            "5. AMOUNTS — include the currency symbol if present (e.g. '$1,234.56', 'R 5,000.00').\n"
+            "6. LISTS — for fields that contain multiple items (skills, line items, etc.),\n"
+            "   join them with '; ' (semicolon-space).\n"
+            "7. ONLY USE 'Not found' when you are certain the field does not exist ANYWHERE\n"
+            "   in the document after a thorough search.\n"
+            "8. NEVER return a label as the value — always extract the data itself.\n"
+            "9. NEVER invent or guess values — if unsure, use 'Not found'.\n"
+            "10. OUTPUT FORMAT: return ONLY a valid JSON object, no markdown fences,\n"
+            "    no explanation, no extra keys.\n\n"
+            f"EXAMPLE OUTPUT FORMAT:\n{example_block}\n\n"
+            f"Return ONLY a JSON object with exactly these keys: {field_names}"
         )
 
     @staticmethod
     def _parse_json_response(text: str, fields: list) -> dict:
         """Parse AI response into a structured dict.
-        Tries strict JSON first, then falls back to line-by-line key:value matching."""
-        import json, re
-        if not text:
-            return {f["name"]: "Not found" for f in fields}
 
-        # 1. Try JSON parse (handle optional markdown fences)
+        Parsing strategy (in order):
+        1. Strip markdown fences → try json.loads on the whole response
+        2. Locate the outermost {...} block inside the response → json.loads
+        3. Fallback: case-insensitive key:value line scanning
+        """
+        import json, re
+
+        EMPTY = {f["name"]: "Not found" for f in fields}
+        if not text:
+            return EMPTY
+
+        def _normalise_value(raw) -> str:
+            """Turn any AI value into a clean string."""
+            if raw is None:
+                return "Not found"
+            if isinstance(raw, (list, tuple)):
+                # Join lists into a semicolon-separated string
+                parts = [str(v).strip() for v in raw if v is not None and str(v).strip()]
+                return "; ".join(parts) if parts else "Not found"
+            val = str(raw).strip().strip('"').strip("'").strip()
+            return val if val and val.lower() not in ("null", "none", "n/a", "") else "Not found"
+
+        def _extract_from_obj(obj: dict) -> dict:
+            result = {}
+            for f in fields:
+                name = f["name"]
+                # Exact key first, then case-insensitive fallback
+                raw = obj.get(name)
+                if raw is None:
+                    for k, v in obj.items():
+                        if k.lower() == name.lower():
+                            raw = v
+                            break
+                result[name] = _normalise_value(raw)
+            return result
+
+        # ── Pass 1: strip fences + direct parse ─────────────────────────
         try:
             cleaned = text.strip()
             if cleaned.startswith("```"):
-                cleaned = re.sub(r"^```[a-z]*\n?", "", cleaned)
-                cleaned = re.sub(r"\n?```$", "", cleaned.rstrip())
+                cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+                cleaned = re.sub(r"\n?```\s*$", "", cleaned.rstrip())
             obj = json.loads(cleaned)
             if isinstance(obj, dict):
-                result = {}
-                for f in fields:
-                    raw = obj.get(f["name"], "Not found")
-                    result[f["name"]] = str(raw).strip() if raw else "Not found"
-                return result
+                return _extract_from_obj(obj)
         except Exception:
             pass
 
-        # 2. Fallback: case-insensitive key:value line scanning
+        # ── Pass 2: find the outermost JSON object in the response ───────
+        try:
+            # Find the first '{' and the matching closing '}'
+            start = text.find("{")
+            if start != -1:
+                depth = 0
+                end = start
+                for i, ch in enumerate(text[start:], start=start):
+                    if ch == "{":
+                        depth += 1
+                    elif ch == "}":
+                        depth -= 1
+                        if depth == 0:
+                            end = i
+                            break
+                candidate = text[start : end + 1]
+                obj = json.loads(candidate)
+                if isinstance(obj, dict):
+                    return _extract_from_obj(obj)
+        except Exception:
+            pass
+
+        # ── Pass 3: line-by-line key:value fallback ──────────────────────
         data: dict = {}
-        field_map = {f["name"].lower().replace(" ", "_"): f["name"] for f in fields}
-        field_map.update({f["name"].lower(): f["name"] for f in fields})
+        field_map: dict = {}
+        for f in fields:
+            nm = f["name"]
+            field_map[nm.lower()] = nm
+            field_map[nm.lower().replace(" ", "_")] = nm
+            field_map[nm.lower().replace("_", " ")] = nm
+
         for line in text.split("\n"):
             if ":" not in line:
                 continue
             raw_key, _, raw_val = line.partition(":")
-            key_norm = re.sub(r"[^a-z0-9_]", "_", raw_key.strip().lower()).strip("_")
+            key_norm = re.sub(r"[^a-z0-9]", "_", raw_key.strip().lower()).strip("_")
             matched = None
             for fk, fn in field_map.items():
-                norm_fk = re.sub(r"[^a-z0-9_]", "_", fk)
-                if norm_fk == key_norm or norm_fk in key_norm or key_norm in norm_fk:
+                norm_fk = re.sub(r"[^a-z0-9]", "_", fk).strip("_")
+                if norm_fk == key_norm:
                     matched = fn
                     break
+                if norm_fk and (norm_fk in key_norm or key_norm in norm_fk):
+                    matched = fn
             if matched and matched not in data:
                 val = raw_val.strip().strip('"').strip("'").strip()
-                if val and val.lower() not in ("", "n/a"):
+                if val and val.lower() not in ("", "n/a", "null", "none"):
                     data[matched] = val
 
         for f in fields:
@@ -530,6 +652,14 @@ class AIService:
     #  OpenAI Vision helpers                                              #
     # ------------------------------------------------------------------ #
 
+    _OPENAI_VISION_SYSTEM = (
+        "You are an expert document data-extraction assistant. "
+        "Examine every part of the image — text blocks, tables, form fields, headers, footers, "
+        "stamps, and handwritten notes. Search for each requested field using its name AND common "
+        "synonyms or label variations. Extract values precisely; never copy a label as a value and "
+        "never invent data. Respond ONLY with a valid JSON object."
+    )
+
     @staticmethod
     def _extract_with_openai_vision_bytes(img_bytes, fields, model, api_key):
         """Extract from a single image using OpenAI Vision with JSON output."""
@@ -538,19 +668,16 @@ class AIService:
         b64 = base64.b64encode(img_bytes).decode("utf-8")
         prompt = AIService._build_json_prompt(
             fields,
-            context_hint="Carefully analyze this document image and extract the requested information.",
+            context_hint=(
+                "Carefully examine this document image. "
+                "Extract every requested field, including data in tables, form boxes, and labels."
+            ),
         )
         kwargs = dict(
             model=model,
             temperature=0,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a precise data extraction assistant. "
-                        "Read the document carefully and respond ONLY with a valid JSON object."
-                    ),
-                },
+                {"role": "system", "content": AIService._OPENAI_VISION_SYSTEM},
                 {
                     "role": "user",
                     "content": [
@@ -562,7 +689,7 @@ class AIService:
                     ],
                 },
             ],
-            max_tokens=2000,
+            max_tokens=4096,
         )
 
         def _call():
@@ -583,13 +710,16 @@ class AIService:
         prompt = AIService._build_json_prompt(
             fields,
             context_hint=(
-                "You are analyzing a multi-page document. All pages are provided below as images. "
-                "Read through ALL pages carefully before answering — data may be spread across pages."
+                f"You are analyzing a {len(page_images)}-page document. "
+                "All pages are shown below as images in order. "
+                "Read through EVERY page carefully — important data may appear on any page. "
+                "Consolidate information from all pages into a single JSON result."
             ),
         )
         content: list = [{"type": "text", "text": prompt}]
-        for img_bytes in page_images:
+        for i, img_bytes in enumerate(page_images):
             b64 = base64.b64encode(img_bytes).decode("utf-8")
+            content.append({"type": "text", "text": f"[Page {i + 1}]"})
             content.append({
                 "type": "image_url",
                 "image_url": {"url": f"data:image/png;base64,{b64}", "detail": "high"},
@@ -598,16 +728,10 @@ class AIService:
             model=model,
             temperature=0,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a precise data extraction assistant. "
-                        "Read every page carefully and respond ONLY with a valid JSON object."
-                    ),
-                },
+                {"role": "system", "content": AIService._OPENAI_VISION_SYSTEM},
                 {"role": "user", "content": content},
             ],
-            max_tokens=2000,
+            max_tokens=4096,
         )
 
         def _call():
@@ -631,19 +755,16 @@ class AIService:
         mime = "image/jpeg" if file_type == "image" else "image/png"
         prompt = AIService._build_json_prompt(
             fields,
-            context_hint="Carefully analyze this document image and extract the requested information.",
+            context_hint=(
+                "Carefully examine this document image. "
+                "Extract every requested field, including data in tables, form boxes, and labels."
+            ),
         )
         kwargs = dict(
             model=model,
             temperature=0,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a precise data extraction assistant. "
-                        "Read the document carefully and respond ONLY with a valid JSON object."
-                    ),
-                },
+                {"role": "system", "content": AIService._OPENAI_VISION_SYSTEM},
                 {
                     "role": "user",
                     "content": [
@@ -652,7 +773,7 @@ class AIService:
                     ],
                 },
             ],
-            max_tokens=2000,
+            max_tokens=4096,
         )
 
         def _call():
@@ -670,7 +791,16 @@ class AIService:
         """Extract data using Google Gemini file upload with JSON output."""
         try:
             genai.configure(api_key=api_key)
-            gemini_model = genai.GenerativeModel(model_name=model)
+            gemini_model = genai.GenerativeModel(
+                model_name=model,
+                system_instruction=(
+                    "You are an expert data extraction assistant. Your job is to read documents "
+                    "and extract specific fields with high precision. Search every part of the "
+                    "document — including tables, headers, footers, form boxes, and footnotes. "
+                    "Look for each field by its name AND by common synonyms and label variations. "
+                    "Always return a valid JSON object. Never invent data. Never copy a label as a value."
+                ),
+            )
 
             try:
                 uploaded_file = genai.upload_file(path=file_path)
@@ -686,12 +816,16 @@ class AIService:
                 try:
                     return gemini_model.generate_content(
                         contents=[prompt, uploaded_file],
-                        generation_config={"temperature": 0.0, "response_mime_type": "application/json"},
+                        generation_config={
+                            "temperature": 0.0,
+                            "response_mime_type": "application/json",
+                            "max_output_tokens": 4096,
+                        },
                     )
                 except Exception:
                     return gemini_model.generate_content(
                         contents=[prompt, uploaded_file],
-                        generation_config={"temperature": 0.0},
+                        generation_config={"temperature": 0.0, "max_output_tokens": 4096},
                     )
 
             response = _call_with_backoff(_call)
@@ -705,19 +839,51 @@ class AIService:
     
     @staticmethod
     def _get_context_prompt_for_file_type(file_type: str) -> str:
-        """Generate context-specific prompts based on file type"""
+        """Return a detailed, file-type-specific extraction context hint."""
         prompts = {
-            'document': "Analyze this document and extract the requested information from the text content.",
-            'image': "Analyze this image and extract any visible text, data, or information that matches the requested fields.",
-            'data': "Analyze this data file (spreadsheet/CSV) and extract information from the rows, columns, and data structure.",
-            'audio': "Analyze this audio file and extract any spoken information, transcribed content, or metadata that matches the requested fields.",
-            'video': "Analyze this video file and extract information from any visible text, spoken content, or visual elements that match the requested fields.",
-            'code': "Analyze this code file and extract relevant information from comments, documentation, variable names, or code structure.",
-            'archive': "Analyze the contents of this archive file and extract information from the contained files and their structure.",
-            'pdf': "Analyze this PDF document and extract the requested information from all pages, including text, tables, and any structured data."
+            'pdf': (
+                "This is a PDF document that may contain multiple pages, tables, form fields, "
+                "stamps, headers, footers, and structured data. Read EVERY page thoroughly. "
+                "Pay close attention to labeled boxes, columns, rows, and adjacent text pairs "
+                "(label on the left/above, value on the right/below)."
+            ),
+            'document': (
+                "This is a text document (e.g. Word, RTF, plain text). Read the entire content "
+                "including headings, body text, tables, and any structured sections. Labels and "
+                "their corresponding values often appear on the same line or in adjacent cells."
+            ),
+            'image': (
+                "This is a document image (scan, photo, or screenshot). Read ALL visible text — "
+                "including printed and handwritten content, stamps, watermarks, table cells, "
+                "and form boxes. Values often appear next to or below their labels."
+            ),
+            'data': (
+                "This is a structured data file (spreadsheet, CSV, or similar). Identify the "
+                "column headers and extract the corresponding cell values. If there are multiple "
+                "rows, focus on the most relevant row unless told otherwise."
+            ),
+            'audio': (
+                "This is an audio file. Extract information from the spoken content, "
+                "transcription, or metadata that matches the requested fields."
+            ),
+            'video': (
+                "This is a video file. Extract information from any visible on-screen text, "
+                "spoken dialogue, captions, or metadata that matches the requested fields."
+            ),
+            'code': (
+                "This is a source code file. Extract relevant information from comments, "
+                "docstrings, function/class names, variable assignments, and configuration values."
+            ),
+            'archive': (
+                "This is an archive file. Extract information from the file listing, "
+                "contained file names, metadata, and any readable text content."
+            ),
         }
-        
-        return prompts.get(file_type, "Analyze this file and extract the requested information from its content.")
+        return prompts.get(
+            file_type,
+            "Read this file in its entirety and extract the requested information, "
+            "checking every section and data element.",
+        )
     
     def get_available_providers():
         """Get available AI providers and their models - Gemini as default.
