@@ -2,6 +2,7 @@ import os
 import logging
 import threading
 import time
+from collections import deque
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
@@ -20,10 +21,13 @@ class BackgroundProcessor:
     
     def __init__(self):
         self.workers = {}  # Track active workers
+        self.worker_lock = Lock()
+        self.pending_jobs = deque()
+        self.pending_job_ids = set()
 
         # Concurrency: match the number of simultaneous API calls allowed in ai_service.py
         _api_concurrency = int(os.environ.get('API_CONCURRENCY', 5))
-        self.max_workers = _api_concurrency          # job-level worker threads
+        self.max_workers = max(1, int(os.environ.get('MAX_ACTIVE_JOBS', 2)))  # job-level worker threads
         self.max_parallel_files = _api_concurrency  # file-level worker threads
 
         self.progress_lock = Lock()  # Thread-safe progress updates
@@ -47,7 +51,8 @@ class BackgroundProcessor:
         self._EXCEL_FLUSH_SIZE = int(os.environ.get('EXCEL_FLUSH_SIZE', 10))
 
         logger.info(
-            f"BackgroundProcessor initialized: concurrency={_api_concurrency}, "
+            f"BackgroundProcessor initialized: api_concurrency={_api_concurrency}, "
+            f"max_active_jobs={self.max_workers}, "
             f"batch_size={self.batch_size}, excel_flush={self._EXCEL_FLUSH_SIZE}"
         )
     
@@ -188,27 +193,15 @@ class BackgroundProcessor:
             }
     
     def estimate_files_cost(self, file_paths, user_id):
-        """Estimate pages/files for uploaded files (credits no longer used for billing)"""
+        """Estimate pages/files for uploaded files.
+
+        This is informational only now that the app is free to use, so keep it
+        intentionally cheap. Counting PDF pages here made the request/queueing
+        phase slow before processing even started.
+        """
         try:
             total_files = len(file_paths)
-            total_pages = 0
-            
-            logger.info(f"Starting cost estimation for {total_files} uploaded files")
-            
-            for file_path in file_paths:
-                filename = os.path.basename(file_path)
-                
-                # Estimate pages (PDFs get actual count, others count as 1)
-                if filename.lower().endswith('.pdf'):
-                    try:
-                        pages = DocumentService.get_pdf_page_count(file_path)
-                        total_pages += pages
-                    except Exception:
-                        total_pages += 1  # Fallback to 1 page
-                else:
-                    total_pages += 1
-            
-            # Previously used for billing; now informational only
+            total_pages = total_files
             estimated_credits = total_pages
             
             logger.info(f"File cost estimation complete: {total_files} files, {total_pages} pages")
@@ -298,27 +291,41 @@ class BackgroundProcessor:
             return {'success': False, 'error': str(e)}
     
     def start_processing_job(self, job_id):
-        """Start processing a job in a background thread"""
-        if len(self.workers) >= self.max_workers:
-            logger.warning(f"Maximum workers ({self.max_workers}) reached, job {job_id} will wait")
-            return False
-        
-        # Start worker thread
+        """Start a job immediately or enqueue it for later."""
+        with self.worker_lock:
+            if job_id in self.workers or job_id in self.pending_job_ids:
+                return job_id in self.workers
+
+            if len(self.workers) >= self.max_workers:
+                self.pending_jobs.append(job_id)
+                self.pending_job_ids.add(job_id)
+                logger.info(f"Queued job {job_id}; active workers at capacity ({self.max_workers})")
+                return False
+
+            self._launch_worker_locked(job_id)
+            return True
+
+    def _launch_worker_locked(self, job_id):
+        """Launch a worker thread. Caller must hold worker_lock."""
         worker_thread = threading.Thread(
             target=self._process_job_worker,
             args=(job_id,),
             daemon=True,
             name=f"ProcessingWorker-{job_id}"
         )
-        worker_thread.start()
-        
         self.workers[job_id] = {
             'thread': worker_thread,
             'started_at': datetime.utcnow()
         }
-        
+        worker_thread.start()
         logger.info(f"Started background processing for job {job_id}")
-        return True
+
+    def _drain_pending_jobs_locked(self):
+        """Start queued jobs until capacity is full. Caller must hold worker_lock."""
+        while self.pending_jobs and len(self.workers) < self.max_workers:
+            next_job_id = self.pending_jobs.popleft()
+            self.pending_job_ids.discard(next_job_id)
+            self._launch_worker_locked(next_job_id)
     
     def _process_single_file(self, file_info):
         """Process a single file in a thread-safe manner with database retry logic"""
@@ -474,6 +481,14 @@ class BackgroundProcessor:
                 # If it's a single dict (image), wrap in a list for consistency
                 if isinstance(extracted_data_list, dict):
                     extracted_data_list = [extracted_data_list]
+
+                first_item = extracted_data_list[0] if extracted_data_list else {}
+                if isinstance(first_item, dict) and first_item.get('error'):
+                    return {
+                        'success': False,
+                        'error': first_item.get('error', 'AI extraction failed'),
+                        'credits_used': 0
+                    }
                 
                 # Merge all page dicts into one: for each field, join values with newlines
                 merged_data = {}
@@ -632,8 +647,9 @@ class BackgroundProcessor:
                     job.fail(str(e))
             finally:
                 # Clean up worker
-                if job_id in self.workers:
-                    del self.workers[job_id]
+                with self.worker_lock:
+                    self.workers.pop(job_id, None)
+                    self._drain_pending_jobs_locked()
                 logger.info(f"Worker finished for job {job_id}")
     
     def _process_folder_job(self, job):
@@ -994,11 +1010,17 @@ class BackgroundProcessor:
                 logger.info(f"Starting file upload processing for job {job.id}: {len(file_paths)} files (parallel)")
 
                 files_to_process = []
-                for fp in file_paths:
-                    filename = os.path.basename(fp)
+                for item in file_paths:
+                    if isinstance(item, dict):
+                        file_path = item.get('file_path') or ''
+                        filename = item.get('filename') or os.path.basename(file_path)
+                    else:
+                        file_path = item
+                        filename = os.path.basename(file_path)
+
                     ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-                    if self._is_supported_file(filename):
-                        files_to_process.append((filename, fp, ext))
+                    if self._is_supported_file(filename) and file_path:
+                        files_to_process.append((filename, file_path, ext))
 
                 total_processed = 0
                 total_failed = 0

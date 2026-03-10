@@ -334,7 +334,7 @@ class DocumentService:
                     isinstance(extracted_data_list[0], dict) and "error" in extracted_data_list[0]):
                     error_msg = extracted_data_list[0].get("error", "Unknown error")
                     logger.error(f"AI extraction error for {document.filename}: {error_msg}")
-                    # Continue processing anyway, with error messages as field values
+                    return False
                 
                 logger.info(f"Extracted data for {document.filename}: {len(extracted_data_list) if isinstance(extracted_data_list, list) else 1} records")
                 

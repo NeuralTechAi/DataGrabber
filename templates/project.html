@@ -687,7 +687,10 @@ Extractor{% endblock %} {% block content %}
          window.location.reload();
        });
 
-           submitUploadBtn.addEventListener('click', async function() {
+          submitUploadBtn.addEventListener('click', async function() {
+        if (uploadInProgress) {
+          return;
+        }
          if (folderInput.files && folderInput.files.length > 0) {
            // Show queuing message immediately with enhanced animation - consistent with Click & Select method
            uploadStatus.innerHTML = `
@@ -722,7 +725,8 @@ Extractor{% endblock %} {% block content %}
 
            try {
              // Use chunked upload so folder size is truly unlimited
-             uploadFilesChunked(validFiles);
+             uploadInProgress = true;
+             await uploadFilesChunked(validFiles);
            } catch (error) {
              uploadStatus.innerHTML = `Error processing files: ${error.message}`;
              uploadStatus.className = 'alert alert-danger mt-2';
@@ -730,8 +734,9 @@ Extractor{% endblock %} {% block content %}
              spinner.classList.add('d-none');
              progressBar.style.display = 'none';
            }
-         } else if (documentFileInput.files.length > 0) {
-           uploadFiles(documentFileInput.files);
+        } else if (pendingSelectedFiles.length > 0 || documentFileInput.files.length > 0) {
+          uploadInProgress = true;
+          await uploadFiles(pendingSelectedFiles.length > 0 ? pendingSelectedFiles : documentFileInput.files);
          } else {
            uploadStatus.innerHTML = 'Please select files or a folder';
            uploadStatus.className = 'alert alert-warning mt-2';
@@ -880,6 +885,8 @@ Extractor{% endblock %} {% block content %}
        const PROJECT_ID   = '{{ project.id }}';
        const UPLOAD_URL   = `/projects/${PROJECT_ID}/upload`;
        const CHUNK_SIZE   = 10;   // files per HTTP request — keeps each request small
+       let pendingSelectedFiles = [];
+       let uploadInProgress = false;
 
        /** Show the spinner / progress bar and lock the submit button */
        function showUploadUI(msg) {
@@ -900,6 +907,7 @@ Extractor{% endblock %} {% block content %}
        function resetUploadUI() {
          submitUploadBtn.disabled = false;
          spinner.classList.add('d-none');
+         uploadInProgress = false;
        }
 
        /** Update progress bar (0–100 %) */
@@ -910,16 +918,21 @@ Extractor{% endblock %} {% block content %}
        // ─── Single-batch upload (drag-drop / manual file picker) ───────────
        async function uploadFiles(files) {
          const fileArray = Array.from(files);
+         let queuedSuccessfully = false;
          showUploadUI(`Uploading ${fileArray.length} file${fileArray.length > 1 ? 's' : ''}…`);
 
          try {
            const formData = new FormData();
-           fileArray.forEach(f => formData.append('files[]', f));
+           fileArray.forEach(f => {
+             formData.append('files[]', f);
+             formData.append('relative_paths[]', f.webkitRelativePath || f.name);
+           });
 
            const response = await safeFetch(UPLOAD_URL, { method: 'POST', body: formData });
            const data = await response.json();
 
            if (response.ok && data.success && data.job_queued) {
+             queuedSuccessfully = true;
              uploadStatus.innerHTML = `
                <div class="d-flex align-items-center">
                  <div class="spinner-grow spinner-grow-sm text-success me-2" role="status"></div>
@@ -941,7 +954,9 @@ Extractor{% endblock %} {% block content %}
            uploadStatus.className = 'alert alert-danger mt-2';
            progressBar.style.display = 'none';
          } finally {
-           resetUploadUI();
+           if (!queuedSuccessfully) {
+             resetUploadUI();
+           }
          }
        }
 
@@ -979,7 +994,10 @@ Extractor{% endblock %} {% block content %}
 
            try {
              const formData = new FormData();
-             chunk.forEach(f => formData.append('files[]', f));
+             chunk.forEach(f => {
+               formData.append('files[]', f);
+               formData.append('relative_paths[]', f.webkitRelativePath || f.name);
+             });
 
              const response = await safeFetch(UPLOAD_URL, { method: 'POST', body: formData });
              const data = await response.json();
@@ -1011,7 +1029,6 @@ Extractor{% endblock %} {% block content %}
            </div>`;
          uploadStatus.className = 'alert alert-success mt-2';
          setProgress(50);
-         resetUploadUI();
 
          await pollChunkedProgress(collectedJobIds, total);
        }
@@ -1044,14 +1061,15 @@ Extractor{% endblock %} {% block content %}
 
                const doneJobs    = (s.total_jobs || 0) - (s.active_jobs || 0);
                const totalJobs   = s.total_jobs || 1;
+               const completedFiles = s.completed_files || ((s.processed_files || 0) + (s.failed_files || 0) + (s.skipped_files || 0));
                // Use file-level progress when available, otherwise fall back to job-level progress
                const filePct     = s.total_files > 0 ? s.progress_percentage || 0 : 0;
                const jobPct      = Math.round(doneJobs / totalJobs * 100);
                const effectivePct = filePct > 0 ? filePct : jobPct;
                setProgress(50 + Math.round(effectivePct / 2));
 
-               const fileDetail = s.processed_files > 0
-                 ? `<strong>${s.processed_files}</strong> / ${s.total_files} files`
+               const fileDetail = completedFiles > 0
+                 ? `<strong>${completedFiles}</strong> / ${s.total_files} files`
                  : `${doneJobs} / ${totalJobs} batch${totalJobs !== 1 ? 'es' : ''} complete`;
 
                uploadStatus.innerHTML = `
@@ -1060,6 +1078,7 @@ Extractor{% endblock %} {% block content %}
                    <span>
                      Processing: ${fileDetail}
                      ${s.failed_files > 0 ? `&nbsp;<span class="text-warning">(${s.failed_files} failed)</span>` : ''}
+                     ${s.skipped_files > 0 ? `&nbsp;<span class="text-secondary">(${s.skipped_files} skipped)</span>` : ''}
                    </span>
                  </div>`;
                uploadStatus.className = 'alert alert-success mt-2';
@@ -1067,17 +1086,27 @@ Extractor{% endblock %} {% block content %}
                if (s.all_done) {
                  clearInterval(iv);
                  setProgress(100);
-                 const successCount = s.processed_files > 0 ? s.processed_files : s.total_files - s.failed_files;
+                 progressBarInner.classList.remove('progress-bar-animated');
+                 progressBarInner.classList.add('bg-success');
+                 const successCount = s.processed_files || 0;
                  uploadStatus.innerHTML = `
                    <div class="d-flex align-items-center">
                      <div class="text-success me-2"><i class="fas fa-check-circle fa-lg"></i></div>
                      <span>
                        <strong>Done!</strong> ${successCount} file${successCount !== 1 ? 's' : ''} processed
+                       ${s.skipped_files > 0 ? ` — <span class="text-secondary">${s.skipped_files} skipped</span>` : ''}
                        ${s.failed_files > 0 ? ` — <span class="text-warning">${s.failed_files} failed</span>` : ''}
                      </span>
                    </div>`;
                  uploadStatus.className = 'alert alert-success mt-2';
-                 setTimeout(() => window.location.reload(), 2500);
+                 showCompletionStats(s);
+                 setTimeout(() => {
+                   completionStatsModal.show();
+                   document.getElementById('completionStatsModal').addEventListener('hidden.bs.modal', function() {
+                     window.location.reload();
+                   }, { once: true });
+                 }, 800);
+                 resetUploadUI();
                  resolve();
                }
              } catch (err) {
@@ -1087,6 +1116,7 @@ Extractor{% endblock %} {% block content %}
                  clearInterval(iv);
                  uploadStatus.innerHTML = `<div class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>Lost connection to server. Refresh the page to see results.</div>`;
                  uploadStatus.className = 'alert alert-warning mt-2';
+                resetUploadUI();
                  resolve();
                }
              }
@@ -1122,33 +1152,40 @@ Extractor{% endblock %} {% block content %}
          dragDropArea.classList.remove('bg-light');
        }
 
-       // Handle file drop - use consistent progress reporting
+      function stageSelectedFiles(files) {
+        pendingSelectedFiles = Array.from(files || []);
+        if (pendingSelectedFiles.length > 0) {
+          uploadStatus.innerHTML = `
+            <div class="d-flex align-items-center">
+              <div class="text-primary me-2"><i class="fas fa-check-circle"></i></div>
+              <span>${pendingSelectedFiles.length} file${pendingSelectedFiles.length !== 1 ? 's' : ''} selected. Click Upload & Process to start.</span>
+            </div>
+          `;
+          uploadStatus.className = 'alert alert-info mt-2';
+        }
+      }
+
+      // Handle file drop - stage files only; submit button starts upload
        dragDropArea.addEventListener('drop', function(e) {
          const dt = e.dataTransfer;
          const files = dt.files;
          if (files.length > 0) {
-          // Show initial status message immediately before processing starts
-          uploadStatus.innerHTML = `
-            <div class="d-flex align-items-center">
-              <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-              <span>Preparing ${files.length} files for upload...</span>
-            </div>
-          `;
-          uploadStatus.className = 'alert alert-info mt-2';
-          progressBar.style.display = 'flex';
-          progressBarInner.style.width = '5%';
-          progressBarInner.classList.add('progress-bar-animated');
-          progressBarInner.classList.add('progress-enhanced');
-          
-          // Process files with consistent progress tracking
-          uploadFiles(files);
+         folderInput.value = '';
+         folderInputLabel.textContent = 'Select folder containing PDFs or images';
+         folderInputLabel.classList.add('text-muted');
+         folderInputLabel.classList.remove('text-primary');
+         stageSelectedFiles(files);
          }
        });
 
-       // Handle file selection
+      // Handle file selection - stage only
        documentFileInput.addEventListener('change', function() {
          if (this.files.length > 0) {
-           uploadFiles(this.files);
+          folderInput.value = '';
+          folderInputLabel.textContent = 'Select folder containing PDFs or images';
+          folderInputLabel.classList.add('text-muted');
+          folderInputLabel.classList.remove('text-primary');
+          stageSelectedFiles(this.files);
          }
        });
 
@@ -1170,6 +1207,8 @@ Extractor{% endblock %} {% block content %}
        // When a folder is selected, show its name and enable the upload button
        folderInput.addEventListener('change', function() {
          if (this.files.length > 0) {
+          pendingSelectedFiles = [];
+          documentFileInput.value = '';
            // Get the folder name from the first file's path
            const firstFile = this.files[0];
            const folderPath = firstFile.webkitRelativePath.split('/')[0];
@@ -1267,8 +1306,7 @@ Extractor{% endblock %} {% block content %}
                progressBarInner.classList.add('bg-success');
                
                // Update UI state
-               submitUploadBtn.disabled = false;
-               spinner.classList.add('d-none');
+              resetUploadUI();
                
                // Ensure we have valid stats data
                if (!data.processed && !data.processed_files) {
@@ -1324,8 +1362,7 @@ Extractor{% endblock %} {% block content %}
                  </div>
                `;
                uploadStatus.className = 'alert alert-warning mt-2';
-               submitUploadBtn.disabled = false;
-               spinner.classList.add('d-none');
+              resetUploadUI();
              } else if (data.status === 'failed') {
                clearInterval(interval);
                uploadStatus.innerHTML = `
@@ -1335,8 +1372,7 @@ Extractor{% endblock %} {% block content %}
                  </div>
                `;
                uploadStatus.className = 'alert alert-danger mt-2';
-               submitUploadBtn.disabled = false;
-               spinner.classList.add('d-none');
+              resetUploadUI();
                progressBar.style.display = 'none';
              } else if (data.status === 'cancelled') {
                clearInterval(interval);
@@ -1347,8 +1383,7 @@ Extractor{% endblock %} {% block content %}
                  </div>
                `;
                uploadStatus.className = 'alert alert-secondary mt-2';
-               submitUploadBtn.disabled = false;
-               spinner.classList.add('d-none');
+              resetUploadUI();
                progressBar.style.display = 'none';
              }
              
@@ -1367,6 +1402,7 @@ Extractor{% endblock %} {% block content %}
                  </div>
                `;
                uploadStatus.className = 'alert alert-warning mt-2';
+              resetUploadUI();
                
                // Auto-refresh after 10 seconds
                setTimeout(() => window.location.reload(), 10000);
@@ -1463,6 +1499,7 @@ Extractor{% endblock %} {% block content %}
                progressBarInner.style.width = '100%';
                progressBarInner.classList.remove('progress-bar-animated');
                progressBarInner.classList.add('bg-success');
+              resetUploadUI();
                
                // Set up button handler
                document.getElementById('showDetailsBtn').addEventListener('click', function() {
@@ -1538,6 +1575,7 @@ Extractor{% endblock %} {% block content %}
 
       function resetUploadForm() {
          uploadForm.reset();
+         pendingSelectedFiles = [];
          progressBar.style.display = 'none';
          progressBarInner.style.width = '0%';
          uploadStatus.innerHTML = '';

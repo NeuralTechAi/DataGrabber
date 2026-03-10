@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import uuid
 from datetime import datetime
 from flask import render_template, request, jsonify, redirect, url_for, abort, g
 from werkzeug.utils import secure_filename
@@ -295,25 +296,38 @@ def upload(project_id):
     try:
         logger.info("Starting file upload and queuing for background processing...")
         
-        # Save uploaded files temporarily
-        temp_file_paths = []
+        # Save uploaded files temporarily using unique paths so chunked folder
+        # uploads cannot overwrite files from earlier batches.
+        queued_files = []
         abs_storage_path = os.path.abspath(project.storage_path)
         os.makedirs(abs_storage_path, exist_ok=True)
+        upload_tmp_dir = os.path.join(abs_storage_path, ".upload_tmp", str(uuid.uuid4()))
+        os.makedirs(upload_tmp_dir, exist_ok=True)
+        relative_paths = request.form.getlist('relative_paths[]')
         
-        for file in files:
+        for idx, file in enumerate(files):
             if file.filename:
-                temp_path = os.path.abspath(os.path.join(abs_storage_path, secure_filename(file.filename)))
+                display_name = file.filename
+                if idx < len(relative_paths) and relative_paths[idx]:
+                    display_name = relative_paths[idx].replace("\\", "/")
+                safe_name = secure_filename(os.path.basename(display_name)) or f"upload_{idx}"
+                temp_path = os.path.abspath(
+                    os.path.join(upload_tmp_dir, f"{uuid.uuid4().hex}_{safe_name}")
+                )
                 file.save(temp_path)
-                temp_file_paths.append(temp_path)
+                queued_files.append({
+                    'filename': display_name[:255],
+                    'file_path': temp_path,
+                })
         
-        if not temp_file_paths:
+        if not queued_files:
             return jsonify({'error': 'No valid files to process'}), 400
         
         # Queue files for background processing with progress tracking
         from app.services.background_processor import background_processor
         result = background_processor.queue_file_processing(
             project_id=project.id,
-            file_paths=temp_file_paths,
+            file_paths=queued_files,
             user_id=g.user.id
         )
         
@@ -329,8 +343,9 @@ def upload(project_id):
             })
         else:
             # Clean up temp files on error
-            for temp_path in temp_file_paths:
+            for item in queued_files:
                 try:
+                    temp_path = item.get('file_path')
                     if os.path.exists(temp_path):
                         os.remove(temp_path)
                 except:
@@ -350,8 +365,9 @@ def upload(project_id):
     except Exception as e:
         logger.error(f"Error processing file upload: {e}", exc_info=True)
         # Clean up temp files on error
-        for temp_path in temp_file_paths:
+        for item in queued_files:
             try:
+                temp_path = item.get('file_path')
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
             except:
@@ -798,9 +814,11 @@ def jobs_status(project_id):
     total_files     = sum(j.total_files     or 0 for j in jobs)
     processed_files = sum(j.processed_files or 0 for j in jobs)
     failed_files    = sum(j.failed_files    or 0 for j in jobs)
+    skipped_files   = sum(j.skipped_files   or 0 for j in jobs)
     active_jobs     = [j for j in jobs if j.status not in TERMINAL]
 
-    progress_pct = int(processed_files / total_files * 100) if total_files > 0 else 0
+    completed_files = processed_files + failed_files + skipped_files
+    progress_pct = int(completed_files / total_files * 100) if total_files > 0 else 0
 
     return jsonify({
         'all_done':          len(active_jobs) == 0,
@@ -809,6 +827,8 @@ def jobs_status(project_id):
         'total_files':       total_files,
         'processed_files':   processed_files,
         'failed_files':      failed_files,
+        'skipped_files':     skipped_files,
+        'completed_files':   completed_files,
         'progress_percentage': progress_pct,
     })
 
