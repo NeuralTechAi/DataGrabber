@@ -3,9 +3,13 @@ import base64
 import random
 import threading
 import time
+import warnings
 from flask import current_app
 import logging
-import google.generativeai as genai
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", FutureWarning)
+    import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
@@ -302,7 +306,6 @@ class AIService:
     @staticmethod
     def _extract_text_with_gemini(text_content: str, fields: list, model: str, api_key: str):
         """Extract structured data from text using Gemini with JSON output."""
-        import google.generativeai as genai
         genai.configure(api_key=api_key)
         gemini_model = genai.GenerativeModel(
             model_name=model,

@@ -1,9 +1,39 @@
 import os
 import secrets
 from datetime import timedelta
-from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+
+def load_env_file_safely(env_path: Path) -> None:
+    """Load a simple .env file without emitting parser warnings.
+
+    This intentionally ignores malformed lines instead of warning on startup.
+    Existing environment variables are preserved.
+    """
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].strip()
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
+
+
+load_env_file_safely(Path(__file__).resolve().parent / ".env")
 
 class Config:
     """Base configuration"""

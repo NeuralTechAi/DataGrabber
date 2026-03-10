@@ -1,6 +1,7 @@
 # In app/services/document_service.py
 import os
 import logging
+import warnings
 from typing import Dict, List
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -8,7 +9,10 @@ from flask import current_app
 from app.models import Document, DataRecord, Project
 from app.extensions import db
 from app.services.ai_service import AIService
-import google.generativeai as genai
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", FutureWarning)
+    import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
