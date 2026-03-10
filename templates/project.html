@@ -908,6 +908,9 @@ Extractor{% endblock %} {% block content %}
          submitUploadBtn.disabled = false;
          spinner.classList.add('d-none');
          uploadInProgress = false;
+         progressBar.style.display = 'none';
+         progressBarInner.classList.remove('progress-bar-animated', 'progress-enhanced');
+         progressBarInner.style.width = '0%';
        }
 
        /** Update progress bar (0–100 %) */
@@ -1015,7 +1018,7 @@ Extractor{% endblock %} {% block content %}
          }
 
          if (collectedJobIds.length === 0) {
-           uploadStatus.innerHTML = `<div class="text-danger"><i class="fas fa-exclamation-circle me-1"></i>All batches failed to upload.</div>`;
+           uploadStatus.innerHTML = `<div class="text-danger"><i class="fas fa-exclamation-circle me-1"></i>All batches failed to upload. Please try again.</div>`;
            uploadStatus.className = 'alert alert-danger mt-2';
            resetUploadUI();
            return;
@@ -1085,28 +1088,15 @@ Extractor{% endblock %} {% block content %}
 
                if (s.all_done) {
                  clearInterval(iv);
-                 setProgress(100);
-                 progressBarInner.classList.remove('progress-bar-animated');
-                 progressBarInner.classList.add('bg-success');
-                 const successCount = s.processed_files || 0;
-                 uploadStatus.innerHTML = `
-                   <div class="d-flex align-items-center">
-                     <div class="text-success me-2"><i class="fas fa-check-circle fa-lg"></i></div>
-                     <span>
-                       <strong>Done!</strong> ${successCount} file${successCount !== 1 ? 's' : ''} processed
-                       ${s.skipped_files > 0 ? ` — <span class="text-secondary">${s.skipped_files} skipped</span>` : ''}
-                       ${s.failed_files > 0 ? ` — <span class="text-warning">${s.failed_files} failed</span>` : ''}
-                     </span>
-                   </div>`;
-                 uploadStatus.className = 'alert alert-success mt-2';
                  showCompletionStats(s);
+                 resetUploadUI();   // hides progress bar, stops spinner, re-enables button
+                 uploadModal.hide();
                  setTimeout(() => {
                    completionStatsModal.show();
                    document.getElementById('completionStatsModal').addEventListener('hidden.bs.modal', function() {
                      window.location.reload();
                    }, { once: true });
-                 }, 800);
-                 resetUploadUI();
+                 }, 400);
                  resolve();
                }
              } catch (err) {
@@ -1114,9 +1104,9 @@ Extractor{% endblock %} {% block content %}
                errorStreak++;
                if (errorStreak >= 5) {
                  clearInterval(iv);
-                 uploadStatus.innerHTML = `<div class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>Lost connection to server. Refresh the page to see results.</div>`;
-                 uploadStatus.className = 'alert alert-warning mt-2';
-                resetUploadUI();
+                 resetUploadUI();
+                 uploadModal.hide();
+                 setTimeout(() => window.location.reload(), 500);
                  resolve();
                }
              }
@@ -1253,15 +1243,16 @@ Extractor{% endblock %} {% block content %}
          let errorCount = 0; // Track error count for resilience
          const maxPolls = 3600; // Max 2 hours of polling (2s intervals)
          
-         const interval = setInterval(async () => {
-           pollCount++;
-           
-           try {
-             const response = await fetch(`/projects/{{ project.id }}/job-status/${currentJobId}`);
-             
-             if (!response.ok) {
-               throw new Error(`HTTP ${response.status}`);
-             }
+        const interval = setInterval(async () => {
+          pollCount++;
+          
+          try {
+            const response = await safeFetch(`/projects/{{ project.id }}/job-status/${currentJobId}`);
+            if (response.status === 401) { clearInterval(interval); resetUploadUI(); return; }
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
              
              const data = await response.json();
              
@@ -1297,60 +1288,27 @@ Extractor{% endblock %} {% block content %}
                  </div>
                `;
                uploadStatus.className = 'alert alert-primary mt-2';
-             } else if (data.status === 'completed') {
-               clearInterval(interval);
-               
-               // Ensure progress bar is at 100% and styled for completion
-               progressBarInner.style.width = '100%';
-               progressBarInner.classList.remove('progress-bar-animated');
-               progressBarInner.classList.add('bg-success');
-               
-               // Update UI state
+            } else if (data.status === 'completed') {
+              clearInterval(interval);
               resetUploadUI();
-               
-               // Ensure we have valid stats data
-               if (!data.processed && !data.processed_files) {
-                 // Default values to ensure stats are displayed
-                 data.processed = data.total_files || 1;
-                 data.skipped = 0; 
-                 data.failed = 0;
-               }
-               
-               // Show status message in the upload modal
-               uploadStatus.innerHTML = `
-                 <div class="d-flex align-items-center">
-                   <div class="text-success me-2">
-                     <i class="fas fa-check-circle fa-lg"></i>
-                   </div>
-                   <div>
-                     <strong>✅ Processing Complete!</strong><br>
-                     <button class="btn btn-sm btn-primary mt-2" id="showDetailsBtn">
-                       <i class="fas fa-chart-bar me-1"></i>View Detailed Results
-                     </button>
-                   </div>
-                 </div>
-               `;
-               uploadStatus.className = 'alert alert-success mt-2';
-               
-               // Use the shared helper function to display stats consistently
-               showCompletionStats(data);
-               
-               // Add click handler for the "View Detailed Results" button
-               document.getElementById('showDetailsBtn').addEventListener('click', function() {
-                 completionStatsModal.show();
-               });
-               
-               // Automatically show the completion modal after a short delay
-               setTimeout(() => {
-                 // Update stats one more time before showing the modal
-                 showCompletionStats(data);
-                 completionStatsModal.show();
-                 
-                 // When modal is dismissed, refresh the page
-                 document.getElementById('completionStatsModal').addEventListener('hidden.bs.modal', function() {
-                   window.location.reload();
-                 });
-               }, 1000);
+
+              // Ensure we have valid stats data
+              if (!data.processed && !data.processed_files) {
+                data.processed = data.total_files || 1;
+                data.skipped = 0;
+                data.failed = 0;
+              }
+
+              showCompletionStats(data);
+
+              // Close upload modal then immediately show completion stats modal
+              uploadModal.hide();
+              setTimeout(() => {
+                completionStatsModal.show();
+                document.getElementById('completionStatsModal').addEventListener('hidden.bs.modal', function() {
+                  window.location.reload();
+                }, { once: true });
+              }, 400);
              } else if (data.status === 'insufficient_credits') {
                // Legacy status; treat as a generic error now that credits are removed
                clearInterval(interval);
@@ -1387,132 +1345,24 @@ Extractor{% endblock %} {% block content %}
                progressBar.style.display = 'none';
              }
              
-             // Stop polling if max polls reached
+             // Stop polling if max polls reached – treat as done, reload page
              if (pollCount >= maxPolls) {
                clearInterval(interval);
-               uploadStatus.innerHTML = `
-                 <div class="d-flex align-items-center">
-                   <div class="text-warning me-2"><i class="fas fa-clock"></i></div>
-                   <span>⏰ Polling timeout - please refresh page to check status</span>
-                 </div>
-                 <div class="mt-2">
-                   <button class="btn btn-primary btn-sm" onClick="window.location.reload()">
-                     <i class="fas fa-sync-alt me-1"></i> Refresh Now
-                   </button>
-                 </div>
-               `;
-               uploadStatus.className = 'alert alert-warning mt-2';
-              resetUploadUI();
-               
-               // Auto-refresh after 10 seconds
-               setTimeout(() => window.location.reload(), 10000);
-             }
-             
-             // Force completion after enough polls if processing is far along
-             if (pollCount > 60 && data.progress_percentage > 90 && data.status === 'processing') {
-               clearInterval(interval);
-               
-               // Update progress bar
-               progressBarInner.style.width = '100%';
-               progressBarInner.classList.remove('progress-bar-animated');
-               progressBarInner.classList.add('bg-success');
-               
-               // Use the shared helper function to display stats consistently
-               showCompletionStats(data);
-               
-               // Show message in upload modal
-               uploadStatus.innerHTML = `
-                 <div class="d-flex align-items-center">
-                   <div class="text-success me-2">
-                     <i class="fas fa-check-circle fa-lg"></i>
-                   </div>
-                   <div>
-                     <strong>✅ Processing Complete!</strong><br>
-                     <button class="btn btn-sm btn-primary mt-2" id="showDetailsBtn">
-                       <i class="fas fa-chart-bar me-1"></i>View Detailed Results
-                     </button>
-                   </div>
-                 </div>
-               `;
-               uploadStatus.className = 'alert alert-success mt-2';
-               
-               // Set up button handler and show stats
-               document.getElementById('showDetailsBtn').addEventListener('click', function() {
-                 completionStatsModal.show();
-               });
-               
-               // Show completion modal and refresh page when closed
-               setTimeout(() => {
-                 completionStatsModal.show();
-                 document.getElementById('completionStatsModal').addEventListener('hidden.bs.modal', function() {
-                   window.location.reload();
-                 });
-               }, 1000);
+               resetUploadUI();
+               uploadModal.hide();
+               setTimeout(() => window.location.reload(), 500);
              }
              
            } catch (error) {
+             if (error && error.sessionExpired) { clearInterval(interval); resetUploadUI(); return; }
              console.error('Polling error:', error);
              errorCount++;
-             // Don't stop polling on network errors, just log them
-             if (pollCount % 30 === 0) { // Show error every minute
-               console.log(`Polling retry ${pollCount}, will continue...`);
-             }
-             
-             // If we've had too many errors in a row, force completion
-             if (errorCount > 5 && pollCount > 30) {
+             // After 5 consecutive errors, give up and reload
+             if (errorCount > 5) {
                clearInterval(interval);
-               
-               // Set up a simplified completion view with limited data
-               const completionStatsContent = document.getElementById('completionStatsContent');
-               completionStatsContent.innerHTML = `
-                 <div class="col-12">
-                   <div class="alert alert-info">
-                     <p class="mb-0">Processing appears to be complete, but we couldn't get the final statistics.</p>
-                     <p class="mb-0">Please refresh the page to see your processed data.</p>
-                   </div>
-                 </div>
-               `;
-               
-               // Update the processing details timestamp
-               const processingDetails = document.getElementById('processingDetails');
-               if (processingDetails) {
-                 processingDetails.innerHTML = `Completed: ${new Date().toLocaleString()}`;
-               }
-               
-               // Show success in upload modal
-               uploadStatus.innerHTML = `
-                 <div class="d-flex align-items-center">
-                   <div class="text-success me-2">
-                     <i class="fas fa-check-circle fa-lg"></i>
-                   </div>
-                   <div>
-                     <strong>✅ Processing Complete!</strong><br>
-                     <button class="btn btn-sm btn-primary mt-2" id="showDetailsBtn">
-                       <i class="fas fa-chart-bar me-1"></i>View Results
-                     </button>
-                   </div>
-                 </div>
-               `;
-               uploadStatus.className = 'alert alert-success mt-2';
-               
-               // Update progress bar to show completion
-               progressBarInner.style.width = '100%';
-               progressBarInner.classList.remove('progress-bar-animated');
-               progressBarInner.classList.add('bg-success');
-              resetUploadUI();
-               
-               // Set up button handler
-               document.getElementById('showDetailsBtn').addEventListener('click', function() {
-                 completionStatsModal.show();
-               });
-               
-               // Show completion modal and refresh page when closed
-               setTimeout(() => {
-                 completionStatsModal.show();
-                 document.getElementById('completionStatsModal').addEventListener('hidden.bs.modal', function() {
-                   window.location.reload();
-                 });
-               }, 1000);
+               resetUploadUI();
+               uploadModal.hide();
+               setTimeout(() => window.location.reload(), 500);
              }
            }
          }, 2000); // Poll every 2 seconds

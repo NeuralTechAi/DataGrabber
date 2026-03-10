@@ -622,7 +622,8 @@ class BackgroundProcessor:
         """Worker thread for processing a job"""
         from app import create_app
         app = create_app()
-        
+        self.app = app  # ensure ThreadPoolExecutor workers in this job share the same app
+
         with app.app_context():
             try:
                 # Get job from database
@@ -661,8 +662,11 @@ class BackgroundProcessor:
             from app import create_app
             self.app = create_app()
             
+        # save job id before potentially entering a different session scope
+        _folder_job_id = job.id
         try:
             with self.app.app_context():
+                job = ProcessingJob.query.get(_folder_job_id)  # re-bind to this session
                 folder_path = job.folder_path
                 if not os.path.exists(folder_path):
                     job.complete_with_error("Folder not found")
@@ -745,13 +749,14 @@ class BackgroundProcessor:
                     # No final credit deduction – processing is always allowed
                 
                 # Final completion
-                with self.app.app_context():
-                    self._complete_folder_processing(job, total_processed, total_failed, total_skipped, total_credits_used)
-                
+                self._complete_folder_processing(job, total_processed, total_failed, total_skipped, total_credits_used)
+
         except Exception as e:
-            logger.error(f"Error in folder processing job {job.id}: {e}", exc_info=True)
+            logger.error(f"Error in folder processing job {_folder_job_id}: {e}", exc_info=True)
             with self.app.app_context():
-                job.complete_with_error(str(e))
+                _ej = ProcessingJob.query.get(_folder_job_id)
+                if _ej:
+                    _ej.complete_with_error(str(e))
     
     def _process_file_batch(self, file_batch):
         """Process a batch of files in parallel and return results"""
@@ -998,8 +1003,10 @@ class BackgroundProcessor:
             from app import create_app
             self.app = create_app()
 
+        _upload_job_id = job.id
         try:
             with self.app.app_context():
+                job = ProcessingJob.query.get(_upload_job_id)  # re-bind to this session
                 file_paths = job.result_data.get('file_paths', [])
                 if not file_paths:
                     job.complete_with_error("No files to process")
@@ -1068,8 +1075,11 @@ class BackgroundProcessor:
                 self._complete_file_processing(job, total_processed, total_failed, total_skipped, total_credits_used)
                 
         except Exception as e:
-            logger.error(f"Error in file upload processing for job {job.id}: {e}", exc_info=True)
-            job.complete_with_error(f"Processing error: {str(e)}")
+            logger.error(f"Error in file upload processing for job {_upload_job_id}: {e}", exc_info=True)
+            with self.app.app_context():
+                _ej = ProcessingJob.query.get(_upload_job_id)
+                if _ej:
+                    _ej.complete_with_error(f"Processing error: {str(e)}")
     
     def _complete_file_processing(self, job, processed, failed, skipped, credits_used):
         """Complete file processing with final statistics"""
