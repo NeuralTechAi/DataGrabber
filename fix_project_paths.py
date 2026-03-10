@@ -66,7 +66,7 @@ def test_gemini_api_simple():
     print("\n=== TESTING GEMINI API KEY ===")
 
     try:
-        import google.generativeai as genai
+        from google import genai
 
         # Get API key
         api_key = os.getenv('GEMINI_API_KEY')
@@ -76,12 +76,11 @@ def test_gemini_api_simple():
 
         print(f"Testing API key: {api_key[:10]}...")
 
-        # Configure genai
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
 
         # Try to list models (simple test)
         try:
-            models = list(genai.list_models())
+            models = list(client.models.list())
             print(f"✅ API key works! Found {len(models)} models")
             return True
         except Exception as e:

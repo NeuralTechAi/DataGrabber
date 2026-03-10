@@ -1,7 +1,5 @@
-# In app/services/document_service.py
 import os
 import logging
-import warnings
 from typing import Dict, List
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -9,10 +7,8 @@ from flask import current_app
 from app.models import Document, DataRecord, Project
 from app.extensions import db
 from app.services.ai_service import AIService
-
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore", FutureWarning)
-    import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -170,17 +166,13 @@ class DocumentService:
     
     @staticmethod
     def _extract_text_from_file_with_gemini(file_path: str, file_type: str) -> str:
-        """Extract text from any file type using Google Gemini with upload_file"""
+        """Extract text from any file type using the new Google GenAI SDK."""
         try:
-            # Configure Gemini API
-            genai.configure(api_key=current_app.config['GEMINI_API_KEY'])
-            
-            # Initialize the model with default or configured model
+            client = genai.Client(api_key=current_app.config['GEMINI_API_KEY'])
             model_name = current_app.config.get('AI_MODEL', 'gemini-1.5-flash')
-            model = genai.GenerativeModel(model_name=model_name)
             
-            # Upload the file (works for all supported formats)
-            uploaded_file = genai.upload_file(path=file_path)
+            # Upload the file (works for supported formats in the Files API)
+            uploaded_file = client.files.upload(file=file_path)
             
             # Generate context-specific prompts
             context_prompts = {
@@ -196,8 +188,14 @@ class DocumentService:
             
             prompt = context_prompts.get(file_type, "Extract and transcribe all readable text content from this file.")
             
-            # Generate content to extract text
-            response = model.generate_content([prompt, uploaded_file])
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[prompt, uploaded_file],
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                    max_output_tokens=4096,
+                ),
+            )
             
             return response.text
             

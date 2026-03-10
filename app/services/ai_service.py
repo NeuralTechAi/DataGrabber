@@ -3,13 +3,10 @@ import base64
 import random
 import threading
 import time
-import warnings
 from flask import current_app
 import logging
-
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore", FutureWarning)
-    import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +57,11 @@ def _call_with_backoff(fn, max_retries: int = 4, base_delay: float = 1.0):
 
 class AIService:
     """Service for AI-related operations"""
+
+    @staticmethod
+    def _get_gemini_client(api_key: str):
+        """Create a Gemini client using the new google.genai SDK."""
+        return genai.Client(api_key=api_key)
 
     @staticmethod
     def get_settings(user=None):
@@ -306,15 +308,7 @@ class AIService:
     @staticmethod
     def _extract_text_with_gemini(text_content: str, fields: list, model: str, api_key: str):
         """Extract structured data from text using Gemini with JSON output."""
-        genai.configure(api_key=api_key)
-        gemini_model = genai.GenerativeModel(
-            model_name=model,
-            system_instruction=(
-                "You are an expert data extraction assistant. Your job is to read documents "
-                "and extract specific fields with high precision. Always return a valid JSON object. "
-                "Never invent data. Search thoroughly before concluding a field is absent."
-            ),
-        )
+        client = AIService._get_gemini_client(api_key)
         text_snippet = text_content[: AIService._MAX_TEXT_CHARS]
         prompt = (
             AIService._build_json_prompt(
@@ -325,20 +319,20 @@ class AIService:
         )
 
         def _call():
-            try:
-                return gemini_model.generate_content(
-                    prompt,
-                    generation_config={
-                        "temperature": 0.0,
-                        "response_mime_type": "application/json",
-                        "max_output_tokens": 4096,
-                    },
-                )
-            except Exception:
-                return gemini_model.generate_content(
-                    prompt,
-                    generation_config={"temperature": 0.0, "max_output_tokens": 4096},
-                )
+            return client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=(
+                        "You are an expert data extraction assistant. Your job is to read documents "
+                        "and extract specific fields with high precision. Always return a valid JSON object. "
+                        "Never invent data. Search thoroughly before concluding a field is absent."
+                    ),
+                    temperature=0.0,
+                    response_mime_type="application/json",
+                    max_output_tokens=4096,
+                ),
+            )
 
         response = _call_with_backoff(_call)
         return [AIService._parse_json_response(response.text, fields)]
@@ -797,20 +791,10 @@ class AIService:
     def _extract_with_gemini_upload(file_path: str, fields: list, model: str, api_key: str, file_type: str):
         """Extract data using Google Gemini file upload with JSON output."""
         try:
-            genai.configure(api_key=api_key)
-            gemini_model = genai.GenerativeModel(
-                model_name=model,
-                system_instruction=(
-                    "You are an expert data extraction assistant. Your job is to read documents "
-                    "and extract specific fields with high precision. Search every part of the "
-                    "document — including tables, headers, footers, form boxes, and footnotes. "
-                    "Look for each field by its name AND by common synonyms and label variations. "
-                    "Always return a valid JSON object. Never invent data. Never copy a label as a value."
-                ),
-            )
+            client = AIService._get_gemini_client(api_key)
 
             try:
-                uploaded_file = genai.upload_file(path=file_path)
+                uploaded_file = client.files.upload(file=file_path)
                 logger.debug(f"File successfully uploaded to Gemini: {file_path}")
             except Exception as upload_error:
                 logger.error(f"Error uploading file to Gemini: {upload_error}", exc_info=True)
@@ -820,20 +804,22 @@ class AIService:
             prompt = AIService._build_json_prompt(fields, context_hint=context_prompt)
 
             def _call():
-                try:
-                    return gemini_model.generate_content(
-                        contents=[prompt, uploaded_file],
-                        generation_config={
-                            "temperature": 0.0,
-                            "response_mime_type": "application/json",
-                            "max_output_tokens": 4096,
-                        },
-                    )
-                except Exception:
-                    return gemini_model.generate_content(
-                        contents=[prompt, uploaded_file],
-                        generation_config={"temperature": 0.0, "max_output_tokens": 4096},
-                    )
+                return client.models.generate_content(
+                    model=model,
+                    contents=[prompt, uploaded_file],
+                    config=types.GenerateContentConfig(
+                        system_instruction=(
+                            "You are an expert data extraction assistant. Your job is to read documents "
+                            "and extract specific fields with high precision. Search every part of the "
+                            "document — including tables, headers, footers, form boxes, and footnotes. "
+                            "Look for each field by its name AND by common synonyms and label variations. "
+                            "Always return a valid JSON object. Never invent data. Never copy a label as a value."
+                        ),
+                        temperature=0.0,
+                        response_mime_type="application/json",
+                        max_output_tokens=4096,
+                    ),
+                )
 
             response = _call_with_backoff(_call)
             logger.info(f"Successfully extracted data from {file_path} (type: {file_type}) with Gemini")
