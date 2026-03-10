@@ -64,6 +64,25 @@ class AIService:
         return genai.Client(api_key=api_key)
 
     @staticmethod
+    def ensure_provider_configured(user=None):
+        """Check that the selected AI provider has a usable configuration.
+
+        Returns (ok: bool, message: str|None).
+        """
+        settings = AIService.get_settings(user=user)
+        provider = settings.get("provider")
+        api_key = settings.get("api_key")
+
+        if provider in ("gemini", "openai", "openrouter") and not api_key:
+            return False, (
+                "No API key is configured for the selected AI provider. "
+                "Please set your key in AI Settings before processing files."
+            )
+
+        # For Ollama we assume the local endpoint handles availability.
+        return True, None
+
+    @staticmethod
     def get_settings(user=None):
         """Get AI provider/model and API key. If user is given and has saved settings, use those; else use app config/env."""
         from app.models import UserAISettings

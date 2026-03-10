@@ -285,6 +285,12 @@ def upload(project_id):
     
     if not files:
         return jsonify({'error': 'No selected files'}), 400
+
+    # Ensure the chosen AI provider is properly configured before accepting uploads
+    from app.services.ai_service import AIService as _AIService
+    ok, msg = _AIService.ensure_provider_configured(user=g.user)
+    if not ok:
+        return jsonify({'error': msg or 'AI provider not configured'}), 400
     
     if logger.isEnabledFor(logging.DEBUG):
         for i, file in enumerate(files[:5]):  # Log first 5 only

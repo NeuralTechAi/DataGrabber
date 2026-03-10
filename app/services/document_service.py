@@ -327,6 +327,13 @@ class DocumentService:
             try:
                 from app.models import User
                 user = User.query.get(project.user_id)
+
+                # Verify AI provider configuration before processing this document
+                ok, msg = AIService.ensure_provider_configured(user=user)
+                if not ok:
+                    logger.error(msg or "AI provider not configured for this user")
+                    return False
+
                 extracted_data_list = AIService.extract_data_with_ai(
                     document.file_path, project.fields, document.file_type, user=user
                 )

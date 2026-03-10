@@ -444,6 +444,12 @@ class BackgroundProcessor:
                 if not project:
                     return {'success': False, 'error': 'Project not found', 'credits_used': 0}
                 user = User.query.get(project.user_id)
+
+                # Ensure AI provider is configured for this user before doing work
+                from app.services.ai_service import AIService
+                ok, msg = AIService.ensure_provider_configured(user=user)
+                if not ok:
+                    return {'success': False, 'error': msg or 'AI provider not configured', 'credits_used': 0}
                 
                 # Calculate pages for this file (credits no longer used for billing)
                 if file_ext == 'pdf':
@@ -463,9 +469,6 @@ class BackgroundProcessor:
                 # Special logging for image files to help debug the issue
                 if file_type == 'image':
                     logger.info(f"IMAGE PROCESSING: {filename} (extension: {file_ext}, size: {os.path.getsize(file_path) if os.path.exists(file_path) else 'MISSING'} bytes)")
-                
-                # Import AI service here to avoid circular imports
-                from app.services.ai_service import AIService
                 
                 # Extract data directly from file using AI (use project owner's AI settings)
                 extracted_data_list = AIService.extract_data_with_ai(
