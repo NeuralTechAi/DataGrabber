@@ -4,12 +4,13 @@ DataGrabber turns your PDFs, images, and documents into structured spreadsheets 
 Upload a stack of invoices, CVs, forms, or any documents — get back a clean Excel file with the fields you care about.
 
 > **No subscription. No credits. Runs on your own computer.**
+> 
 Note:
 
 Data extraction from files/documents is continuous and incremental with DataGrabber. Once you create a template, you don’t need to recreate it when you want to extract data from similar files/documents next time; you just have to continue from where you left off. Extracted data is continuously saved in the folder you defined when creating the template.
 
 With DataGrabber, you can upload or drag-and-drop your unstructured files/documents, relax, and wait for it to do the job for you. You can also plug in a folder with thousands of related files/documents, and DataGrabber will do the rest for you.
-DataGrabber is free and open. Try it on https://lnkd.in/eT-repCX
+DataGrabber is free and open. 
 
 With DataGrabber, you can review or update extracted data, giving you full assurance and control.
 
